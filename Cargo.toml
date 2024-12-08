@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "dotfile-ocd"
+description = "Experimental dotfile manager that treats your home directory like a git repository"
+keywords = ["dotfile-manager", "ricing", "git", "cli-tool"]
+categories = ["command-line-utilities"]
+repository = "https://github.com/awkless/dotfile-ocd"
+readme = "README.md"
+authors = ["Jason Pena <jasonpena@awkless.com>"]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+rust-version = "1.77.2"
+
+[[bin]]
+name = "ocd"
+path = "src/main.rs"
+test = false
+doc = false
