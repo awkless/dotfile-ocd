@@ -39,7 +39,22 @@ impl Toml {
         table: impl AsRef<str>,
         entry: (Key, Item),
     ) -> Result<Option<(Key, Item)>, TomlError> {
-        todo!();
+        let (key, value) = entry;
+        info!("Add TOML entry '{}' to '{}' table", key.get(), table.as_ref());
+
+        let entry = match self.get_table_mut(table.as_ref()) {
+            Ok(table) => table,
+            Err(TomlError::TableNotFound { .. }) => {
+                let mut new_table = Table::new();
+                new_table.set_implicit(true);
+                self.doc.insert(table.as_ref(), Item::Table(new_table));
+                self.doc[table.as_ref()].as_table_mut().unwrap()
+            }
+            Err(err) => return Err(err),
+        };
+        let entry = entry.insert(key.get(), value).map(|old| (key, old));
+
+        Ok(entry)
     }
 
     pub fn remove(
@@ -53,6 +68,13 @@ impl Toml {
     pub(crate) fn get_table(&self, key: &str) -> Result<&Table, TomlError> {
         let table = self.doc.get(key).context(TableNotFoundSnafu { table: key })?;
         let table = table.as_table().context(NotTableSnafu { table: key })?;
+
+        Ok(table)
+    }
+
+    pub(crate) fn get_table_mut(&mut self, key: &str) -> Result<&mut Table, TomlError> {
+        let table = self.doc.get_mut(key).context(TableNotFoundSnafu { table: key })?;
+        let table = table.as_table_mut().context(NotTableSnafu { table: key })?;
 
         Ok(table)
     }
