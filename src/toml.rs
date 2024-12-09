@@ -300,4 +300,28 @@ mod tests {
 
         Ok(())
     }
+
+    #[rstest]
+    #[case::table_not_found(
+        "bar = 'foo not here'",
+        TomlError::TableNotFound { table: "foo".into() },
+    )]
+    #[case::not_table(
+        "foo = 'not a table'",
+        TomlError::NotTable { table: "foo".into() },
+    )]
+    #[case::entry_not_found(
+        "[foo] # bar not here",
+        TomlError::EntryNotFound { table: "foo".into(), key: "bar".into() },
+    )]
+    fn toml_remove_return_err(
+        #[case] input: &str,
+        #[case] expect: TomlError
+    ) -> Result<(), Report<TomlError>> {
+        let toml: Toml = input.parse().map_err(Report::from_error)?;
+        let result = toml.get("foo", "bar");
+        assert_eq!(result.unwrap_err(), expect);
+
+        Ok(())
+    }
 }
