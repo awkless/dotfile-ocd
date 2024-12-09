@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 use toml_edit::{DocumentMut, Item, Key, TomlError as TomlEditError};
+use log::{trace, info};
 
 #[derive(Clone, Default, Debug)]
 pub struct Toml {
@@ -15,7 +16,8 @@ pub struct Toml {
 
 impl Toml {
     pub fn new() -> Self {
-        todo!();
+        trace!("Construct new TOML parser");
+        Self { doc: DocumentMut::new() }
     }
 
     pub fn get(
