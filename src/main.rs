@@ -8,7 +8,7 @@ mod toml;
 
 use env_logger::Builder as EnvLogBuilder;
 use log::{error, LevelFilter};
-use snafu::{ErrorCompat, Whatever};
+use snafu::{Report, Whatever};
 use std::{env::args_os, ffi::OsString, process::exit};
 
 fn main() {
@@ -22,10 +22,8 @@ fn main() {
     let code = match run(args_os) {
         Ok(code) => code,
         Err(err) => {
+            let err = Report::from_error(err);
             error!("{err}");
-            if let Some(bt) = ErrorCompat::backtrace(&err) {
-                error!("{bt}");
-            }
             ExitCode::Failure
         }
     }
@@ -43,7 +41,7 @@ where
 }
 
 #[derive(Debug)]
-pub enum ExitCode {
+enum ExitCode {
     Success,
     Failure,
 }
