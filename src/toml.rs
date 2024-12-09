@@ -263,4 +263,35 @@ mod tests {
 
         Ok(())
     }
+
+    #[rstest]
+    #[case::remove_foo(
+        toml_input(),
+        "test",
+        "foo",
+        (Key::new("foo"), Item::Value(Value::from("world"))),
+        toml_input().replace("foo = \"hello\"\n", ""),
+    )]
+    #[case::remove_bar(
+        toml_input(),
+        "test",
+        "bar",
+        (Key::new("bar"), Item::Value(Value::from(true))),
+        toml_input().replace("bar = true\n", ""),
+    )]
+    fn toml_remove_return_deleted_key_item(
+        #[case] input: String,
+        #[case] table: &str,
+        #[case] key: &str,
+        #[case] expect: (Key, Item),
+        #[case] output: String,
+    ) -> Result<(), Report<TomlError>> {
+        let mut toml: Toml = input.parse().map_err(Report::from_error)?;
+        let (return_key, return_value) = toml.remove(table, key).map_err(Report::from_error)?;
+        let (expect_key, expect_value) = expect;
+        assert_eq!(toml.to_string(), output);
+        assert_eq!(return_key, expect_key);
+        assert_eq!(return_value.is_value(), expect_value.is_value());
+        Ok(())
+    }
 }
