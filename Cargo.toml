@@ -19,6 +19,7 @@ name = "ocd"
 path = "src/main.rs"
 
 [dependencies]
+directories = "~5.0.1"
 env_logger = "~0.11.5"
 log = "~0.4.22"
 snafu = "~0.8.5"
