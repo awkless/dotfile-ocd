@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
+mod locate;
+
 use env_logger::Builder as EnvLogBuilder;
 use log::{error, LevelFilter};
 use std::{env::args_os, process::exit, ffi::OsString};
