@@ -14,17 +14,17 @@ pub trait Locator {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConfigPaths {
+pub struct XdgLocator {
     layout: BaseDirs,
     config_dir: PathBuf,
     hooks_dir: PathBuf,
     repos_dir: PathBuf,
 }
 
-impl ConfigPaths {
+impl XdgLocator {
     pub fn locate() -> Result<Self, LocateError> {
         trace!("Determine configuration paths");
-        let layout = BaseDirs::new().ok_or(LocateError::NoWayHome)?;
+        let layout = BaseDirs::new().context(NoWayHomeSnafu)?;
         let config_dir = layout.config_dir().join("dotfiles-ocd");
         let hooks_dir = config_dir.join("hooks");
         let repos_dir = layout.data_dir().join("dotfiles-ocd");
@@ -32,7 +32,7 @@ impl ConfigPaths {
     }
 }
 
-impl Locator for ConfigPaths {
+impl Locator for XdgLocator {
     fn home_dir(&self) -> &Path {
         self.layout.home_dir()
     }
@@ -51,7 +51,12 @@ impl Locator for ConfigPaths {
 }
 
 #[derive(Debug, Snafu)]
-pub enum LocateError {
+pub struct LocateError(InnerLocateError);
+
+#[derive(Debug, Snafu)]
+enum InnerLocateError {
     #[snafu(display("Cannot determine path to home directory"))]
     NoWayHome,
 }
+
+pub type Result<T, E = LocateError> = std::result::Result<T, E>;
