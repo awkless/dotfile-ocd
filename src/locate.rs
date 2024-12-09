@@ -28,12 +28,7 @@ impl ConfigPaths {
         let config_dir = layout.config_dir().join("dotfiles-ocd");
         let hooks_dir = config_dir.join("hooks");
         let repos_dir = layout.data_dir().join("dotfiles-ocd");
-        Ok(Self {
-            layout,
-            config_dir,
-            hooks_dir,
-            repos_dir,
-        })
+        Ok(Self { layout, config_dir, hooks_dir, repos_dir })
     }
 }
 
