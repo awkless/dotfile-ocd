@@ -44,13 +44,13 @@ impl Toml {
 
         let entry = match self.get_table_mut(table.as_ref()) {
             Ok(table) => table,
-            Err(TomlError::TableNotFound { .. }) => {
+            Err(InnerTomlError::TableNotFound { .. }) => {
                 let mut new_table = Table::new();
                 new_table.set_implicit(true);
                 self.doc.insert(table.as_ref(), Item::Table(new_table));
                 self.doc[table.as_ref()].as_table_mut().unwrap()
             }
-            Err(err) => return Err(err),
+            Err(err) => return Err(err.into()),
         };
         let entry = entry.insert(key.get(), value).map(|old| (key, old));
 
@@ -70,14 +70,14 @@ impl Toml {
         Ok(entry)
     }
 
-    pub(crate) fn get_table(&self, key: &str) -> Result<&Table, TomlError> {
+    fn get_table(&self, key: &str) -> Result<&Table, InnerTomlError> {
         let table = self.doc.get(key).context(TableNotFoundSnafu { table: key })?;
         let table = table.as_table().context(NotTableSnafu { table: key })?;
 
         Ok(table)
     }
 
-    pub(crate) fn get_table_mut(&mut self, key: &str) -> Result<&mut Table, TomlError> {
+    fn get_table_mut(&mut self, key: &str) -> Result<&mut Table, InnerTomlError> {
         let table = self.doc.get_mut(key).context(TableNotFoundSnafu { table: key })?;
         let table = table.as_table_mut().context(NotTableSnafu { table: key })?;
 
@@ -101,7 +101,10 @@ impl FromStr for Toml {
 }
 
 #[derive(Debug, Snafu, PartialEq, Eq)]
-pub enum TomlError {
+pub struct TomlError(InnerTomlError);
+
+#[derive(Debug, Snafu, PartialEq, Eq)]
+enum InnerTomlError {
     #[snafu(display("Failed to parse TOML data"))]
     BadParse { source: TomlEditError },
 
@@ -114,6 +117,8 @@ pub enum TomlError {
     #[snafu(display("TOML entry '{key}' not found in table '{table}'"))]
     EntryNotFound { table: String, key: String },
 }
+
+pub type Result<T, E = TomlError> = std::result::Result<T, E>;
 
 #[cfg(test)]
 mod tests {
@@ -148,7 +153,7 @@ mod tests {
         #[values("this 'will fail'", "[will # also fail", "not.gonna = [work]")] input: &str,
     ) {
         let result: Result<Toml, TomlError> = input.parse();
-        assert!(matches!(result.unwrap_err(), TomlError::BadParse { .. }));
+        assert!(matches!(result.unwrap_err().0, InnerTomlError::BadParse { .. }));
     }
 
     #[report]
@@ -174,23 +179,23 @@ mod tests {
     #[rstest]
     #[case::table_not_found(
         "bar = 'foo not here'",
-        TomlError::TableNotFound { table: "foo".into() },
+        InnerTomlError::TableNotFound { table: "foo".into() },
     )]
     #[case::not_table(
         "foo = 'not a table'",
-        TomlError::NotTable { table: "foo".into() },
+        InnerTomlError::NotTable { table: "foo".into() },
     )]
     #[case::entry_not_found(
         "[foo] # bar not here",
-        TomlError::EntryNotFound { table: "foo".into(), key: "bar".into() },
+        InnerTomlError::EntryNotFound { table: "foo".into(), key: "bar".into() },
     )]
     fn toml_get_return_err(
         #[case] input: &str,
-        #[case] expect: TomlError,
+        #[case] expect: InnerTomlError,
     ) -> Result<()> {
         let toml: Toml = input.parse()?;
         let result = toml.get("foo", "bar");
-        assert_eq!(result.unwrap_err(), expect);
+        assert_eq!(result.unwrap_err().0, expect);
 
         Ok(())
     }
@@ -259,15 +264,15 @@ mod tests {
 
     #[report]
     #[rstest]
-    #[case::not_table("foo = 'not a table'", TomlError::NotTable { table: "foo".into() })]
+    #[case::not_table("foo = 'not a table'", InnerTomlError::NotTable { table: "foo".into() })]
     fn toml_add_return_err(
         #[case] input: &str,
-        #[case] expect: TomlError,
+        #[case] expect: InnerTomlError,
     ) -> Result<()> {
         let mut toml: Toml = input.parse()?;
         let stub = (Key::new("fail"), Item::Value(Value::from("this")));
         let result = toml.add("foo", stub);
-        assert_eq!(result.unwrap_err(), expect);
+        assert_eq!(result.unwrap_err().0, expect);
 
         Ok(())
     }
@@ -309,23 +314,23 @@ mod tests {
     #[rstest]
     #[case::table_not_found(
         "bar = 'foo not here'",
-        TomlError::TableNotFound { table: "foo".into() },
+        InnerTomlError::TableNotFound { table: "foo".into() },
     )]
     #[case::not_table(
         "foo = 'not a table'",
-        TomlError::NotTable { table: "foo".into() },
+        InnerTomlError::NotTable { table: "foo".into() },
     )]
     #[case::entry_not_found(
         "[foo] # bar not here",
-        TomlError::EntryNotFound { table: "foo".into(), key: "bar".into() },
+        InnerTomlError::EntryNotFound { table: "foo".into(), key: "bar".into() },
     )]
     fn toml_remove_return_err(
         #[case] input: &str,
-        #[case] expect: TomlError,
+        #[case] expect: InnerTomlError,
     ) -> Result<()> {
         let toml: Toml = input.parse()?;
         let result = toml.get("foo", "bar");
-        assert_eq!(result.unwrap_err(), expect);
+        assert_eq!(result.unwrap_err().0, expect);
 
         Ok(())
     }
