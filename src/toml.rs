@@ -72,4 +72,14 @@ mod tests {
 
         Ok(())
     }
+
+    #[rstest]
+    fn toml_parse_return_err_bad_parse(
+        #[values("this 'will fail'", "[will # also fail", "not.gonna = [work]")] input: &str,
+    ) -> Result<(), Whatever> {
+        let result: Result<Toml, TomlError> = input.parse();
+        assert!(matches!(result.unwrap_err(), TomlError::BadParse { .. }));
+
+        Ok(())
+    }
 }
