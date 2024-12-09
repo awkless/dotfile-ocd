@@ -17,5 +17,8 @@ rust-version = "1.77.2"
 [[bin]]
 name = "ocd"
 path = "src/main.rs"
-test = false
-doc = false
+
+[dependencies]
+env_logger = "~0.11.5"
+log = "~0.4.22"
+snafu = "~0.8.5"
