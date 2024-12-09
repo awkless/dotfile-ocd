@@ -316,7 +316,7 @@ mod tests {
     )]
     fn toml_remove_return_err(
         #[case] input: &str,
-        #[case] expect: TomlError
+        #[case] expect: TomlError,
     ) -> Result<(), Report<TomlError>> {
         let toml: Toml = input.parse().map_err(Report::from_error)?;
         let result = toml.get("foo", "bar");
