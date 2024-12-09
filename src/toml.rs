@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 use snafu::prelude::*;
-use std::str::FromStr;
+use std::{
+    fmt::{Display, Formatter, Result as FmtResult},
+    str::FromStr,
+};
 use toml_edit::{DocumentMut, Item, Key, TomlError as TomlEditError};
 
 #[derive(Clone, Default, Debug)]
@@ -55,31 +58,58 @@ pub enum TomlError {
     BadParse { source: TomlEditError },
 }
 
+type Result<T, E = TomlError> = std::result::Result<T, E>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use indoc::indoc;
     use pretty_assertions::assert_eq;
-    use rstest::rstest;
-    use snafu::Whatever;
+    use rstest::{fixture, rstest};
+    use snafu::Report;
+    use toml_edit::Value;
+
+    #[fixture]
+    fn toml_input() -> String {
+        String::from(indoc! {r#"
+            # this comment should remain!
+            [test]
+            foo = "hello"
+            bar = true
+        "#})
+    }
 
     #[rstest]
     fn toml_parse_return_self(
         #[values("this = 'will parse'", "[so_will_this]", "hello = 'from ocd!'")] input: &str,
-    ) -> Result<(), Whatever> {
+    ) {
         let toml: Result<Toml, TomlError> = input.parse();
         assert!(toml.is_ok());
-
-        Ok(())
     }
 
     #[rstest]
     fn toml_parse_return_err_bad_parse(
         #[values("this 'will fail'", "[will # also fail", "not.gonna = [work]")] input: &str,
-    ) -> Result<(), Whatever> {
+    ) {
         let result: Result<Toml, TomlError> = input.parse();
         assert!(matches!(result.unwrap_err(), TomlError::BadParse { .. }));
+    }
 
+    #[rstest]
+    #[case("test", "foo", (Key::new("foo"), Item::Value(Value::from("hello"))))]
+    #[case("test", "bar", (Key::new("bar"), Item::Value(Value::from(true))))]
+    fn toml_get_return_key_item(
+        toml_input: String,
+        #[case] table: &str,
+        #[case] key: &str,
+        #[case] expect: (Key, Item),
+    ) -> Result<(), Report<TomlError>> {
+        let toml: Toml = toml_input.parse().map_err(Report::from_error)?;
+        let (result_key, result_value) = toml.get(table, key).map_err(Report::from_error)?;
+        let (expect_key, expect_value) = expect;
+        assert_eq!(result_key, &expect_key);
+        assert_eq!(result_value.is_value(), expect_value.is_value());
         Ok(())
     }
 }
