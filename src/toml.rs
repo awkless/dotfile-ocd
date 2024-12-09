@@ -115,8 +115,6 @@ pub enum TomlError {
     EntryNotFound { table: String, key: String },
 }
 
-type Result<T, E = TomlError> = std::result::Result<T, E>;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,7 +122,7 @@ mod tests {
     use indoc::{formatdoc, indoc};
     use pretty_assertions::assert_eq;
     use rstest::{fixture, rstest};
-    use snafu::Report;
+    use snafu::report;
     use toml_edit::Value;
 
     #[fixture]
@@ -153,6 +151,7 @@ mod tests {
         assert!(matches!(result.unwrap_err(), TomlError::BadParse { .. }));
     }
 
+    #[report]
     #[rstest]
     #[case("test", "foo", (Key::new("foo"), Item::Value(Value::from("hello"))))]
     #[case("test", "bar", (Key::new("bar"), Item::Value(Value::from(true))))]
@@ -161,9 +160,9 @@ mod tests {
         #[case] table: &str,
         #[case] key: &str,
         #[case] expect: (Key, Item),
-    ) -> Result<(), Report<TomlError>> {
-        let toml: Toml = toml_input.parse().map_err(Report::from_error)?;
-        let (result_key, result_value) = toml.get(table, key).map_err(Report::from_error)?;
+    ) -> Result<()> {
+        let toml: Toml = toml_input.parse()?;
+        let (result_key, result_value) = toml.get(table, key)?;
         let (expect_key, expect_value) = expect;
         assert_eq!(result_key, &expect_key);
         assert_eq!(result_value.is_value(), expect_value.is_value());
@@ -171,6 +170,7 @@ mod tests {
         Ok(())
     }
 
+    #[report]
     #[rstest]
     #[case::table_not_found(
         "bar = 'foo not here'",
@@ -187,14 +187,15 @@ mod tests {
     fn toml_get_return_err(
         #[case] input: &str,
         #[case] expect: TomlError,
-    ) -> Result<(), Report<TomlError>> {
-        let toml: Toml = input.parse().map_err(Report::from_error)?;
+    ) -> Result<()> {
+        let toml: Toml = input.parse()?;
         let result = toml.get("foo", "bar");
         assert_eq!(result.unwrap_err(), expect);
 
         Ok(())
     }
 
+    #[report]
     #[rstest]
     #[case::add_into_table(
         toml_input(),
@@ -219,15 +220,16 @@ mod tests {
         #[case] table: &str,
         #[case] entry: (Key, Item),
         #[case] expect: String,
-    ) -> Result<(), Report<TomlError>> {
-        let mut toml: Toml = input.parse().map_err(Report::from_error)?;
-        let result = toml.add(table, entry).map_err(Report::from_error)?;
+    ) -> Result<()> {
+        let mut toml: Toml = input.parse()?;
+        let result = toml.add(table, entry)?;
         assert_eq!(toml.to_string(), expect);
         assert!(result.is_none());
 
         Ok(())
     }
 
+    #[report]
     #[rstest]
     #[case::replace_foo(
         toml_input(),
@@ -246,22 +248,23 @@ mod tests {
         #[case] table: &str,
         #[case] entry: (Key, Item),
         #[case] expect: String,
-    ) -> Result<(), Report<TomlError>> {
-        let mut toml: Toml = input.parse().map_err(Report::from_error)?;
-        let result = toml.add(table, entry).map_err(Report::from_error)?;
+    ) -> Result<()> {
+        let mut toml: Toml = input.parse()?;
+        let result = toml.add(table, entry)?;
         assert_eq!(toml.to_string(), expect);
         assert!(result.is_some());
 
         Ok(())
     }
 
+    #[report]
     #[rstest]
     #[case::not_table("foo = 'not a table'", TomlError::NotTable { table: "foo".into() })]
     fn toml_add_return_err(
         #[case] input: &str,
         #[case] expect: TomlError,
-    ) -> Result<(), Report<TomlError>> {
-        let mut toml: Toml = input.parse().map_err(Report::from_error)?;
+    ) -> Result<()> {
+        let mut toml: Toml = input.parse()?;
         let stub = (Key::new("fail"), Item::Value(Value::from("this")));
         let result = toml.add("foo", stub);
         assert_eq!(result.unwrap_err(), expect);
@@ -269,6 +272,7 @@ mod tests {
         Ok(())
     }
 
+    #[report]
     #[rstest]
     #[case::remove_foo(
         toml_input(),
@@ -290,9 +294,9 @@ mod tests {
         #[case] key: &str,
         #[case] expect: (Key, Item),
         #[case] output: String,
-    ) -> Result<(), Report<TomlError>> {
-        let mut toml: Toml = input.parse().map_err(Report::from_error)?;
-        let (return_key, return_value) = toml.remove(table, key).map_err(Report::from_error)?;
+    ) -> Result<()> {
+        let mut toml: Toml = input.parse()?;
+        let (return_key, return_value) = toml.remove(table, key)?;
         let (expect_key, expect_value) = expect;
         assert_eq!(toml.to_string(), output);
         assert_eq!(return_key, expect_key);
@@ -301,6 +305,7 @@ mod tests {
         Ok(())
     }
 
+    #[report]
     #[rstest]
     #[case::table_not_found(
         "bar = 'foo not here'",
@@ -317,8 +322,8 @@ mod tests {
     fn toml_remove_return_err(
         #[case] input: &str,
         #[case] expect: TomlError,
-    ) -> Result<(), Report<TomlError>> {
-        let toml: Toml = input.parse().map_err(Report::from_error)?;
+    ) -> Result<()> {
+        let toml: Toml = input.parse()?;
         let result = toml.get("foo", "bar");
         assert_eq!(result.unwrap_err(), expect);
 
