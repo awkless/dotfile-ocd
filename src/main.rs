@@ -5,8 +5,8 @@ mod locate;
 
 use env_logger::Builder as EnvLogBuilder;
 use log::{error, LevelFilter};
-use std::{env::args_os, process::exit, ffi::OsString};
 use snafu::{ErrorCompat, Whatever};
+use std::{env::args_os, ffi::OsString, process::exit};
 
 fn main() {
     EnvLogBuilder::new()
