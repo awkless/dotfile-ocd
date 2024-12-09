@@ -58,6 +58,12 @@ impl Toml {
     }
 }
 
+impl Display for Toml {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", self.doc)
+    }
+}
+
 impl FromStr for Toml {
     type Err = TomlError;
 
@@ -88,7 +94,7 @@ type Result<T, E = TomlError> = std::result::Result<T, E>;
 mod tests {
     use super::*;
 
-    use indoc::indoc;
+    use indoc::{formatdoc, indoc};
     use pretty_assertions::assert_eq;
     use rstest::{fixture, rstest};
     use snafu::Report;
@@ -158,6 +164,39 @@ mod tests {
         let toml: Toml = input.parse().map_err(Report::from_error)?;
         let result = toml.get("foo", "bar");
         assert_eq!(result.unwrap_err(), expect);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::add_into_table(
+        toml_input(),
+        "test",
+        (Key::new("baz"), Item::Value(Value::from("add this"))),
+        formatdoc! {r#"
+            {}baz = "add this"
+        "#, toml_input()},
+    )]
+    #[case::create_new_table(
+        toml_input(),
+        "new_test",
+        (Key::new("baz"), Item::Value(Value::from("add this"))),
+        formatdoc! {r#"
+            {}
+            [new_test]
+            baz = "add this"
+        "#, toml_input()}
+    )]
+    fn toml_add_return_none(
+        #[case] input: String,
+        #[case] table: &str,
+        #[case] entry: (Key, Item),
+        #[case] expect: String,
+    ) -> Result<(), Report<TomlError>> {
+        let mut toml: Toml = input.parse().map_err(Report::from_error)?;
+        let result = toml.add(table, entry).map_err(Report::from_error)?;
+        assert_eq!(toml.to_string(), expect);
+        assert!(result.is_none());
 
         Ok(())
     }
