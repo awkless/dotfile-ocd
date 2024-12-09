@@ -222,4 +222,30 @@ mod tests {
 
         Ok(())
     }
+
+    #[rstest]
+    #[case::replace_foo(
+        toml_input(),
+        "test",
+        (Key::new("foo"), Item::Value(Value::from("replaced"))),
+        toml_input().replace(r#"foo = "hello""#, r#"foo = "replaced""#)
+    )]
+    #[case::replace_bar(
+        toml_input(),
+        "test",
+        (Key::new("bar"), Item::Value(Value::from(false))),
+        toml_input().replace(r#"bar = true"#, r#"bar = false"#)
+    )]
+    fn toml_add_return_some_key_item(
+        #[case] input: String,
+        #[case] table: &str,
+        #[case] entry: (Key, Item),
+        #[case] expect: String,
+    ) -> Result<(), Report<TomlError>> {
+        let mut toml: Toml = input.parse().map_err(Report::from_error)?;
+        let result = toml.add(table, entry).map_err(Report::from_error)?;
+        assert_eq!(toml.to_string(), expect);
+        assert!(result.is_some());
+        Ok(())
+    }
 }
