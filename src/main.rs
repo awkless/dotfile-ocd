@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
+#![allow(dead_code)]
+
 mod locate;
 
 use env_logger::Builder as EnvLogBuilder;
@@ -31,7 +33,7 @@ fn main() {
     exit(code);
 }
 
-fn run<I, F>(args: F) -> Result<ExitCode, Whatever>
+fn run<I, F>(_args: F) -> Result<ExitCode, Whatever>
 where
     I: IntoIterator<Item = OsString>,
     F: FnOnce() -> I + Clone,
