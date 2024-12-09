@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
+use log::{info, trace};
 use snafu::prelude::*;
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     str::FromStr,
 };
-use toml_edit::{DocumentMut, Item, Key, TomlError as TomlEditError};
-use log::{trace, info};
+use toml_edit::{DocumentMut, Item, Key, Table, TomlError as TomlEditError};
 
 #[derive(Clone, Default, Debug)]
 pub struct Toml {
@@ -17,7 +17,9 @@ pub struct Toml {
 impl Toml {
     pub fn new() -> Self {
         trace!("Construct new TOML parser");
-        Self { doc: DocumentMut::new() }
+        Self {
+            doc: DocumentMut::new(),
+        }
     }
 
     pub fn get(
@@ -25,7 +27,20 @@ impl Toml {
         table: impl AsRef<str>,
         key: impl AsRef<str>,
     ) -> Result<(&Key, &Item), TomlError> {
-        todo!();
+        info!(
+            "Get TOML entry '{}' from '{}' table",
+            key.as_ref(),
+            table.as_ref()
+        );
+        let entry = self.get_table(table.as_ref())?;
+        let entry = entry
+            .get_key_value(key.as_ref())
+            .context(EntryNotFoundSnafu {
+                table: table.as_ref(),
+                key: key.as_ref(),
+            })?;
+
+        Ok(entry)
     }
 
     pub fn add(
@@ -43,6 +58,16 @@ impl Toml {
     ) -> Result<(Key, Item), TomlError> {
         todo!();
     }
+
+    pub(crate) fn get_table(&self, key: &str) -> Result<&Table, TomlError> {
+        let table = self
+            .doc
+            .get(key)
+            .context(TableNotFoundSnafu { table: key })?;
+        let table = table.as_table().context(NotTableSnafu { table: key })?;
+
+        Ok(table)
+    }
 }
 
 impl FromStr for Toml {
@@ -58,6 +83,15 @@ impl FromStr for Toml {
 pub enum TomlError {
     #[snafu(display("Failed to parse TOML data"))]
     BadParse { source: TomlEditError },
+
+    #[snafu(display("TOML table '{table}' not found"))]
+    TableNotFound { table: String },
+
+    #[snafu(display("TOML table '{table}' not defined as a table"))]
+    NotTable { table: String },
+
+    #[snafu(display("TOML entry '{key}' not found in table '{table}'"))]
+    EntryNotFound { table: String, key: String },
 }
 
 type Result<T, E = TomlError> = std::result::Result<T, E>;
