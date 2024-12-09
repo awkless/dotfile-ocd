@@ -246,6 +246,21 @@ mod tests {
         let result = toml.add(table, entry).map_err(Report::from_error)?;
         assert_eq!(toml.to_string(), expect);
         assert!(result.is_some());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::not_table("foo = 'not a table'", TomlError::NotTable { table: "foo".into() })]
+    fn toml_add_return_err(
+        #[case] input: &str,
+        #[case] expect: TomlError,
+    ) -> Result<(), Report<TomlError>> {
+        let mut toml: Toml = input.parse().map_err(Report::from_error)?;
+        let stub = (Key::new("fail"), Item::Value(Value::from("this")));
+        let result = toml.add("foo", stub);
+        assert_eq!(result.unwrap_err(), expect);
+
         Ok(())
     }
 }
