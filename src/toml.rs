@@ -189,10 +189,7 @@ mod tests {
         "[foo] # bar not here",
         InnerTomlError::EntryNotFound { table: "foo".into(), key: "bar".into() },
     )]
-    fn toml_get_return_err(
-        #[case] input: &str,
-        #[case] expect: InnerTomlError,
-    ) -> Result<()> {
+    fn toml_get_return_err(#[case] input: &str, #[case] expect: InnerTomlError) -> Result<()> {
         let toml: Toml = input.parse()?;
         let result = toml.get("foo", "bar");
         assert_eq!(result.unwrap_err().0, expect);
@@ -265,10 +262,7 @@ mod tests {
     #[report]
     #[rstest]
     #[case::not_table("foo = 'not a table'", InnerTomlError::NotTable { table: "foo".into() })]
-    fn toml_add_return_err(
-        #[case] input: &str,
-        #[case] expect: InnerTomlError,
-    ) -> Result<()> {
+    fn toml_add_return_err(#[case] input: &str, #[case] expect: InnerTomlError) -> Result<()> {
         let mut toml: Toml = input.parse()?;
         let stub = (Key::new("fail"), Item::Value(Value::from("this")));
         let result = toml.add("foo", stub);
@@ -324,10 +318,7 @@ mod tests {
         "[foo] # bar not here",
         InnerTomlError::EntryNotFound { table: "foo".into(), key: "bar".into() },
     )]
-    fn toml_remove_return_err(
-        #[case] input: &str,
-        #[case] expect: InnerTomlError,
-    ) -> Result<()> {
+    fn toml_remove_return_err(#[case] input: &str, #[case] expect: InnerTomlError) -> Result<()> {
         let toml: Toml = input.parse()?;
         let result = toml.get("foo", "bar");
         assert_eq!(result.unwrap_err().0, expect);
