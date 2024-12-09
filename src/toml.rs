@@ -62,7 +62,12 @@ impl Toml {
         table: impl AsRef<str>,
         key: impl AsRef<str>,
     ) -> Result<(Key, Item), TomlError> {
-        todo!();
+        let entry = self.get_table_mut(table.as_ref())?;
+        let entry = entry
+            .remove_entry(key.as_ref())
+            .context(EntryNotFoundSnafu { table: table.as_ref(), key: key.as_ref() })?;
+
+        Ok(entry)
     }
 
     pub(crate) fn get_table(&self, key: &str) -> Result<&Table, TomlError> {
@@ -292,6 +297,7 @@ mod tests {
         assert_eq!(toml.to_string(), output);
         assert_eq!(return_key, expect_key);
         assert_eq!(return_value.is_value(), expect_value.is_value());
+
         Ok(())
     }
 }
