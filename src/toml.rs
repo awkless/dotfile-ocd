@@ -50,3 +50,22 @@ impl FromStr for Toml {
 
 #[derive(Debug, Snafu)]
 pub enum TomlError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+    use snafu::Whatever;
+
+    #[rstest]
+    fn toml_parse_return_self(
+        #[values("this = 'will parse'", "[so_will_this]", "hello = 'from ocd!'")] input: &str,
+    ) -> Result<(), Whatever> {
+        let toml: Result<Toml, TomlError> = input.parse();
+        assert!(toml.is_ok());
+
+        Ok(())
+    }
+}
