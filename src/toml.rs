@@ -17,9 +17,7 @@ pub struct Toml {
 impl Toml {
     pub fn new() -> Self {
         trace!("Construct new TOML parser");
-        Self {
-            doc: DocumentMut::new(),
-        }
+        Self { doc: DocumentMut::new() }
     }
 
     pub fn get(
@@ -27,18 +25,11 @@ impl Toml {
         table: impl AsRef<str>,
         key: impl AsRef<str>,
     ) -> Result<(&Key, &Item), TomlError> {
-        info!(
-            "Get TOML entry '{}' from '{}' table",
-            key.as_ref(),
-            table.as_ref()
-        );
+        info!("Get TOML entry '{}' from '{}' table", key.as_ref(), table.as_ref());
         let entry = self.get_table(table.as_ref())?;
         let entry = entry
             .get_key_value(key.as_ref())
-            .context(EntryNotFoundSnafu {
-                table: table.as_ref(),
-                key: key.as_ref(),
-            })?;
+            .context(EntryNotFoundSnafu { table: table.as_ref(), key: key.as_ref() })?;
 
         Ok(entry)
     }
@@ -60,10 +51,7 @@ impl Toml {
     }
 
     pub(crate) fn get_table(&self, key: &str) -> Result<&Table, TomlError> {
-        let table = self
-            .doc
-            .get(key)
-            .context(TableNotFoundSnafu { table: key })?;
+        let table = self.doc.get(key).context(TableNotFoundSnafu { table: key })?;
         let table = table.as_table().context(NotTableSnafu { table: key })?;
 
         Ok(table)
@@ -79,7 +67,7 @@ impl FromStr for Toml {
     }
 }
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Snafu, PartialEq, Eq)]
 pub enum TomlError {
     #[snafu(display("Failed to parse TOML data"))]
     BadParse { source: TomlEditError },
@@ -146,6 +134,31 @@ mod tests {
         let (expect_key, expect_value) = expect;
         assert_eq!(result_key, &expect_key);
         assert_eq!(result_value.is_value(), expect_value.is_value());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::table_not_found(
+        "bar = 'foo not here'",
+        TomlError::TableNotFound { table: "foo".into() },
+    )]
+    #[case::not_table(
+        "foo = 'not a table'",
+        TomlError::NotTable { table: "foo".into() },
+    )]
+    #[case::entry_not_found(
+        "[foo] # bar not here",
+        TomlError::EntryNotFound { table: "foo".into(), key: "bar".into() },
+    )]
+    fn toml_get_return_err(
+        #[case] input: &str,
+        #[case] expect: TomlError,
+    ) -> Result<(), Report<TomlError>> {
+        let toml: Toml = input.parse().map_err(Report::from_error)?;
+        let result = toml.get("foo", "bar");
+        assert_eq!(result.unwrap_err(), expect);
+
         Ok(())
     }
 }
