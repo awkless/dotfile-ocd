@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 mod locate;
+mod toml;
 
 use env_logger::Builder as EnvLogBuilder;
 use log::{error, LevelFilter};
