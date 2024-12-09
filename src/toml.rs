@@ -3,7 +3,7 @@
 
 use snafu::prelude::*;
 use std::str::FromStr;
-use toml_edit::{DocumentMut, Item, Key};
+use toml_edit::{DocumentMut, Item, Key, TomlError as TomlEditError};
 
 #[derive(Clone, Default, Debug)]
 pub struct Toml {
@@ -44,12 +44,16 @@ impl FromStr for Toml {
     type Err = TomlError;
 
     fn from_str(data: &str) -> Result<Self, Self::Err> {
-        todo!();
+        let doc: DocumentMut = data.parse().context(BadParseSnafu)?;
+        Ok(Self { doc })
     }
 }
 
 #[derive(Debug, Snafu)]
-pub enum TomlError {}
+pub enum TomlError {
+    #[snafu(display("Failed to parse TOML data"))]
+    BadParse { source: TomlEditError },
+}
 
 #[cfg(test)]
 mod tests {
