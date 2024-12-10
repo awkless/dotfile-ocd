@@ -6,6 +6,10 @@ use log::trace;
 use snafu::prelude::*;
 use std::path::{Path, PathBuf};
 
+/// Representation of a locator handler.
+///
+/// Provides _expected_ paths to configuration data. Path validation is left to
+/// the caller to figure out.
 pub trait Locator {
     fn home_dir(&self) -> &Path;
     fn config_dir(&self) -> &Path;
@@ -13,6 +17,7 @@ pub trait Locator {
     fn repos_dir(&self) -> &Path;
 }
 
+/// Locator type that uses XDG Base Directory specification.
 #[derive(Debug, Clone)]
 pub struct XdgLocator {
     layout: BaseDirs,
@@ -22,6 +27,14 @@ pub struct XdgLocator {
 }
 
 impl XdgLocator {
+    /// Construct new XDG locator type.
+    ///
+    /// Will determine expected configuration data paths according to XDG
+    /// Base Directory specification.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if home directory cannot be determined.
     pub fn locate() -> Result<Self, LocateError> {
         trace!("Determine configuration paths");
         let layout = BaseDirs::new().context(NoWayHomeSnafu)?;
@@ -50,13 +63,15 @@ impl Locator for XdgLocator {
     }
 }
 
+/// Locator error type for public API.
 #[derive(Debug, Snafu)]
 pub struct LocateError(InnerLocateError);
+
+/// Alias to allow one-off functions with different error type.
+pub type Result<T, E = LocateError> = std::result::Result<T, E>;
 
 #[derive(Debug, Snafu)]
 enum InnerLocateError {
     #[snafu(display("Cannot determine path to home directory"))]
     NoWayHome,
 }
-
-pub type Result<T, E = LocateError> = std::result::Result<T, E>;

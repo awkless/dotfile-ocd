@@ -9,6 +9,7 @@ use std::{
 };
 use toml_edit::{DocumentMut, Item, Key, Table, TomlError as TomlEditError};
 
+/// Format preserving TOML parser.
 #[derive(Clone, Default, Debug)]
 pub struct Toml {
     doc: DocumentMut,
@@ -20,6 +21,15 @@ impl Toml {
         Self { doc: DocumentMut::new() }
     }
 
+    /// Get entry from TOML document.
+    ///
+    /// Return key-value pair ref in `table` by `key`.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if `table` does not exist in TOML document, `table` was not
+    /// defined as a table item in TOML document, or `key` does not exist in
+    /// `table`.
     pub fn get(
         &self,
         table: impl AsRef<str>,
@@ -34,6 +44,17 @@ impl Toml {
         Ok(entry)
     }
 
+    /// Add entry into TOML document.
+    ///
+    /// Insert `entry` into `table`. If `entry` already exists in `table`, then
+    /// it will be replaced. Return [`Some`] containing original `entry`
+    /// _before_ replacement, or [`None`] if no replacement took place. Finally,
+    /// if `table` does not exist, then it will be created with `entry` inserted
+    /// into it.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if `table` was not defined as a table item in TOML document.
     pub fn add(
         &mut self,
         table: impl AsRef<str>,
@@ -57,6 +78,15 @@ impl Toml {
         Ok(entry)
     }
 
+    /// Remove entry from TOML document.
+    ///
+    /// Return removed entry in `table` by `key`.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if `table` does not exist in TOML document, `table` was not
+    /// defined as a table item in TOML document, or `key` does not exist in
+    /// `table`.
     pub fn remove(
         &mut self,
         table: impl AsRef<str>,
@@ -100,8 +130,12 @@ impl FromStr for Toml {
     }
 }
 
+/// TOML parser error type for public API.
 #[derive(Debug, Snafu, PartialEq, Eq)]
 pub struct TomlError(InnerTomlError);
+
+/// Alias to allow one-off functions with different error type.
+pub type Result<T, E = TomlError> = std::result::Result<T, E>;
 
 #[derive(Debug, Snafu, PartialEq, Eq)]
 enum InnerTomlError {
@@ -117,8 +151,6 @@ enum InnerTomlError {
     #[snafu(display("TOML entry '{key}' not found in table '{table}'"))]
     EntryNotFound { table: String, key: String },
 }
-
-pub type Result<T, E = TomlError> = std::result::Result<T, E>;
 
 #[cfg(test)]
 mod tests {
