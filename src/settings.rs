@@ -191,6 +191,51 @@ impl Display for OsKind {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CmdHookSettings {
+    pub cmd: String,
+    pub hooks: Vec<HookSettings>,
+}
+
+impl CmdHookSettings {
+    pub fn new(cmd: impl Into<String>) -> Self {
+        Self { cmd: cmd.into(), ..Default::default() }
+    }
+
+    pub fn add_hook(mut self, hook: HookSettings) -> Self {
+        self.hooks.push(hook);
+        self
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct HookSettings {
+    pub pre: Option<String>,
+    pub post: Option<String>,
+    pub workdir: Option<PathBuf>,
+}
+
+impl HookSettings {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn with_pre(mut self, script: impl Into<String>) -> Self {
+        self.pre = Some(script.into());
+        self
+    }
+
+    pub fn with_post(mut self, script: impl Into<String>) -> Self {
+        self.post = Some(script.into());
+        self
+    }
+
+    pub fn with_workdir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.workdir = Some(path.into());
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
