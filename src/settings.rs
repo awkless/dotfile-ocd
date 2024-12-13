@@ -70,7 +70,6 @@ impl<'toml> Visit<'toml> for RepoSettings {
             }
             &_ => visit_table_like_kv(self, key, node),
         };
-
         visit_table_like_kv(self, key, node);
     }
 }
@@ -208,6 +207,12 @@ impl CmdHookSettings {
     }
 }
 
+impl<'toml> From<(&'toml Key, &'toml Item)> for CmdHookSettings {
+    fn from(entry: (&'toml Key, &'toml Item)) -> Self {
+        todo!();
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HookSettings {
     pub pre: Option<String>,
@@ -275,6 +280,19 @@ mod tests {
         Ok(doc)
     }
 
+    #[fixture]
+    fn cmd_hook_settings_doc() -> Result<DocumentMut, TomlError> {
+        let doc: DocumentMut = indoc! {r#"
+            commit = [
+                { pre = "hook.sh", post = "hook.sh", workdir = "/some/path" },
+                { pre = "hook.sh" },
+                { post = "hook.sh" }
+            ]
+        "#}
+        .parse()?;
+        Ok(doc)
+    }
+
     #[report]
     #[rstest]
     #[case::no_bootstrap(
@@ -302,6 +320,25 @@ mod tests {
         let result = RepoSettings::from(entry);
         assert_eq!(result, expect);
 
+        Ok(())
+    }
+
+    #[report]
+    #[rstest]
+    #[case(
+        CmdHookSettings::new("commit")
+            .add_hook(HookSettings::new().with_pre("hook.sh").with_post("hook.sh").with_workdir("/some/path"))
+            .add_hook(HookSettings::new().with_pre("hook.sh"))
+            .add_hook(HookSettings::new().with_post("hook.sh")),
+    )]
+    fn cmd_hook_settings_from_key_item_return_self(
+        cmd_hook_settings_doc: Result<DocumentMut, TomlError>,
+        #[case] expect: CmdHookSettings,
+    ) -> Result<(), TomlError> {
+        let cmd_hook_settings_doc = cmd_hook_settings_doc?;
+        let entry = cmd_hook_settings_doc.as_table().get_key_value(expect.cmd.as_str()).unwrap();
+        let result = CmdHookSettings::from(entry);
+        assert_eq!(result, expect);
         Ok(())
     }
 }
