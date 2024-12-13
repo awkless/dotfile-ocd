@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use std::path::PathBuf;
+use toml_edit::{Key, Item};
 
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct RepoSettings {
@@ -35,6 +36,12 @@ impl RepoSettings {
     pub fn with_bootstrap(mut self, bootstrap: BootstrapSettings) -> Self {
         self.bootstrap = Some(bootstrap);
         self
+    }
+}
+
+impl<'toml> From<(&'toml Key, &'toml Item)> for RepoSettings {
+    fn from(entry: (&'toml Key, &'toml Item)) -> Self {
+        todo!();
     }
 }
 
@@ -104,4 +111,70 @@ pub enum OsKind {
     MacOs,
 
     Windows,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use pretty_assertions::assert_eq;
+    use rstest::{fixture, rstest};
+    use snafu::report;
+    use toml_edit::{DocumentMut, TomlError};
+    use indoc::indoc;
+
+    #[fixture]
+    fn repo_settings_doc() -> Result<DocumentMut, TomlError> {
+        let doc: DocumentMut = indoc! {r#"
+            [foo]
+            branch = "master"
+            remote = "origin"
+            worktree = "$HOME"
+
+            [bar]
+            branch = "main"
+            remote = "origin"
+            worktree = "$HOME"
+
+            [bar.bootstrap]
+            clone = "https://some/url"
+            os = "unix"
+            depends = ["foo", "baz"]
+            ignores = ["LICENSE*", "README*"]
+            users = ["awkless", "sedgwick"]
+            hosts = ["lovelace", "turing"]
+        "#}
+        .parse()?;
+        Ok(doc)
+    }
+
+    #[report]
+    #[rstest]
+    #[case::no_bootstrap(
+        RepoSettings::new("foo", "master", "origin")
+            .with_worktree("$HOME")
+    )]
+    #[case::with_bootstrap(
+        RepoSettings::new("bar", "main", "origin")
+            .with_worktree("$HOME")
+            .with_bootstrap(
+                BootstrapSettings::new("https://some/url")
+                    .with_os(OsKind::Unix)
+                    .with_depends(["foo", "baz"])
+                    .with_ignores(["LICENSE*", "README*"])
+                    .with_users(["awkless", "sedgwick"])
+                    .with_hosts(["lovelace", "turing"])
+            )
+    )]
+    fn repo_settings_from_key_item_return_self(
+        repo_settings_doc: Result<DocumentMut, TomlError>,
+        #[case] expect: RepoSettings,
+    ) -> Result<(), TomlError> {
+        let repo_settings_doc = repo_settings_doc?;
+        let entry = repo_settings_doc.as_table().get_key_value(expect.name.as_str()).unwrap();
+        let result = RepoSettings::from(entry);
+        assert_eq!(result, expect);
+
+        Ok(())
+    }
 }
