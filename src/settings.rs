@@ -6,8 +6,8 @@ use std::{
     path::PathBuf,
 };
 use toml_edit::{
-    visit::{visit_table_like_kv, Visit},
-    Item, Key,
+    visit::{visit_inline_table, visit_table_like_kv, Visit},
+    Item, Key, InlineTable,
 };
 
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
@@ -44,16 +44,23 @@ impl RepoSettings {
     }
 }
 
-fn from_toml<'toml>(entry: (&'toml Key, &'toml Item)) -> RepoSettings {
+fn repo_settings_from_toml<'toml>(entry: (&'toml Key, &'toml Item)) -> RepoSettings {
     let (key, value) = entry;
     let mut repo = RepoSettings { name: key.get().into(), ..Default::default() };
     repo.visit_item(value);
     repo
 }
 
+impl From<(Key, Item)> for RepoSettings {
+    fn from(entry: (Key, Item)) -> Self {
+        let (key, value) = entry;
+        repo_settings_from_toml((&key, &value))
+    }
+}
+
 impl<'toml> From<(&'toml Key, &'toml Item)> for RepoSettings {
     fn from(entry: (&'toml Key, &'toml Item)) -> Self {
-        from_toml(entry)
+        repo_settings_from_toml(entry)
     }
 }
 
@@ -207,9 +214,36 @@ impl CmdHookSettings {
     }
 }
 
+fn cmd_hook_settings_from_toml<'toml>(entry: (&'toml Key, &'toml Item)) -> CmdHookSettings {
+    let (key, value) = entry;
+    let mut cmd_hook = CmdHookSettings::new(key.get());
+    cmd_hook.visit_item(value);
+    cmd_hook
+}
+
+impl From<(Key, Item)> for CmdHookSettings {
+    fn from(entry: (Key, Item)) -> Self {
+        let (key, value) = entry;
+        cmd_hook_settings_from_toml((&key, &value))
+    }
+}
+
 impl<'toml> From<(&'toml Key, &'toml Item)> for CmdHookSettings {
     fn from(entry: (&'toml Key, &'toml Item)) -> Self {
-        todo!();
+        cmd_hook_settings_from_toml(entry)
+    }
+}
+
+impl<'toml> Visit<'toml> for CmdHookSettings {
+    fn visit_inline_table(&mut self, node: &'toml InlineTable) {
+        let hook = HookSettings {
+            pre: node.get("pre").and_then(|s| s.as_str().map(|s| s.into())),
+            post: node.get("post").and_then(|s| s.as_str().map(|s| s.into())),
+            workdir: node.get("workdir").and_then(|s| s.as_str().map(|s| s.into())),
+        };
+        self.hooks.push(hook);
+
+        visit_inline_table(self, node);
     }
 }
 
@@ -327,7 +361,12 @@ mod tests {
     #[rstest]
     #[case(
         CmdHookSettings::new("commit")
-            .add_hook(HookSettings::new().with_pre("hook.sh").with_post("hook.sh").with_workdir("/some/path"))
+            .add_hook(
+                HookSettings::new()
+                    .with_pre("hook.sh")
+                    .with_post("hook.sh")
+                    .with_workdir("/some/path")
+            )
             .add_hook(HookSettings::new().with_pre("hook.sh"))
             .add_hook(HookSettings::new().with_post("hook.sh")),
     )]
@@ -339,6 +378,7 @@ mod tests {
         let entry = cmd_hook_settings_doc.as_table().get_key_value(expect.cmd.as_str()).unwrap();
         let result = CmdHookSettings::from(entry);
         assert_eq!(result, expect);
+
         Ok(())
     }
 }
