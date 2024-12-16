@@ -10,7 +10,7 @@ use crate::{
 use snafu::prelude::*;
 use std::{
     path::{PathBuf, Path},
-    fmt::{Display, Formatter, Result as FmtResult},
+    fmt::{Debug, Display, Formatter, Result as FmtResult},
     fs::OpenOptions,
     io::{Read, Write, Error as IoError},
 };
@@ -83,7 +83,7 @@ where
 /// Configuration file startegy.
 ///
 /// Interface to simplify serialization and deserialization of parsed TOML data.
-pub trait Config {
+pub trait Config: Debug {
     type Entry;
 
     fn get(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError>;
@@ -179,23 +179,12 @@ mod tests {
             .with_file("config.toml", |fixture| {
                 fixture
                     .data(indoc! {r#"
-                        [repos.foo]
+                        # Formatting should remain the same!
+
+                        [repos.vim]
                         branch = "master"
                         remote = "origin"
-                        worktree = "$HOME"
-
-                        [repos.bar]
-                        branch = "main"
-                        remote = "upstream"
-                        worktree = "$HOME"
-
-                        [repos.bar.bootstrap]
-                        clone = "https://some/url"
-                        os = "unix"
-                        depends = ["foo", "baz"]
-                        ignores = ["LICENSE*", "README*"]
-                        users = ["awkless", "sedgwick"]
-                        hosts = ["lovelace", "turing"]
+                        workdir_home = true
 
                         [hooks]
                         commit = [
@@ -206,6 +195,9 @@ mod tests {
                     "#})
                     .kind(FileKind::Normal)
                     .write()
+            })?
+            .with_file("bad_format.toml", |fixture| {
+                fixture.data("this 'will fail!").kind(FileKind::Normal).write()
             })?;
         Ok(harness)
     }
@@ -231,6 +223,7 @@ mod tests {
         Ok(())
     }
 
+    #[report]
     #[rstest]
     #[case::repo_config(RepoConfig)]
     #[case::hook_cmd_config(CmdHookConfig)]
@@ -246,6 +239,26 @@ mod tests {
         let config = ConfigFile::load(config_kind, &locator)
             .with_whatever_context(|_| "Failed to load configuration file")?;
         assert!(config.as_path().exists());
+
+        Ok(())
+    }
+
+    #[report]
+    #[rstest]
+    #[case::repo_config(RepoConfig)]
+    #[case::cmd_hook_config(CmdHookConfig)]
+    fn config_file_load_return_err_toml(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: impl Config,
+    ) -> Result<(), Whatever> {
+        let config_dir = config_dir?;
+        let fixture = config_dir.get("bad_format.toml")?;
+        let mut locator = MockLocator::new();
+        locator.expect_repos_config().return_const(fixture.as_path().into());
+        locator.expect_hooks_config().return_const(fixture.as_path().into());
+
+        let result = ConfigFile::load(config_kind, &locator);
+        assert!(matches!(result.unwrap_err().0, InnerConfigError::Toml { .. }));
 
         Ok(())
     }
