@@ -65,11 +65,13 @@ impl RepoSettings {
             }
 
             if let Some(depends) = &bootstrap.depends {
-                bootstrap_opts.insert("depends", Item::Value(Value::Array(Array::from_iter(depends))));
+                bootstrap_opts
+                    .insert("depends", Item::Value(Value::Array(Array::from_iter(depends))));
             }
 
             if let Some(ignores) = &bootstrap.ignores {
-                bootstrap_opts.insert("ignores", Item::Value(Value::Array(Array::from_iter(ignores))));
+                bootstrap_opts
+                    .insert("ignores", Item::Value(Value::Array(Array::from_iter(ignores))));
             }
 
             if let Some(users) = &bootstrap.users {
