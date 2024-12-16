@@ -257,6 +257,38 @@ impl CmdHookSettings {
         self.hooks.push(hook);
         self
     }
+
+    fn to_toml(&self) -> (Key, Item) {
+        let mut tables = Array::new();
+        let mut iter = self.hooks.iter().enumerate().peekable();
+        while let Some((_, hook)) = iter.next() {
+            let mut inline = InlineTable::new();
+            let decor = inline.decor_mut();
+
+            decor.set_prefix("\n    ");
+            if iter.peek().is_none() {
+                decor.set_suffix("\n");
+            }
+
+            if let Some(pre) = &hook.pre {
+                inline.insert("pre", Value::from(pre));
+            }
+
+            if let Some(post) = &hook.post {
+                inline.insert("post", Value::from(post));
+            }
+
+            if let Some(workdir) = &hook.workdir {
+                inline.insert("workdir", Value::from(workdir.to_string_lossy().into_owned()));
+            }
+
+            tables.push_formatted(Value::from(inline));
+        }
+
+        let key = Key::new(&self.cmd);
+        let value = Item::Value(Value::from(tables));
+        (key, value)
+    }
 }
 
 fn cmd_hook_settings_from_toml<'toml>(entry: (&'toml Key, &'toml Item)) -> CmdHookSettings {
@@ -467,5 +499,36 @@ mod tests {
         assert_eq!(result, expect);
 
         Ok(())
+    }
+
+    #[rstest]
+    #[case(
+        CmdHookSettings::new("commit")
+            .add_hook(
+                HookSettings::new()
+                    .with_pre("hook.sh")
+                    .with_post("hook.sh")
+                    .with_workdir("/some/path")
+            )
+            .add_hook(HookSettings::new().with_pre("hook.sh"))
+            .add_hook(HookSettings::new().with_post("hook.sh")),
+        indoc! {r#"
+            commit = [
+                { pre = "hook.sh", post = "hook.sh", workdir = "/some/path" },
+                { pre = "hook.sh" },
+                { post = "hook.sh" }
+            ]
+        "#},
+    )]
+    fn cmd_hook_settings_to_toml_return_key_item(
+        #[case] input: CmdHookSettings,
+        #[case] expect: &str,
+    ) {
+        let (key, item) = input.to_toml();
+        let mut doc = DocumentMut::new();
+        let table = doc.as_table_mut();
+        table.insert_formatted(&key, item);
+        table.set_implicit(true);
+        assert_eq!(doc.to_string(), expect);
     }
 }
