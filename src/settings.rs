@@ -181,7 +181,7 @@ impl<'toml> Visit<'toml> for BootstrapSettings {
     fn visit_table_like_kv(&mut self, key: &'toml str, node: &'toml Item) {
         match key {
             "clone" => self.clone = node.as_str().unwrap_or_default().into(),
-            "os" => self.os = node.as_str().map(|k| OsKind::from(k)),
+            "os" => self.os = node.as_str().map(OsKind::from),
             "depends" => {
                 self.depends = node.as_array().map(|a| {
                     a.into_iter().map(|s| s.as_str().unwrap_or_default().to_string()).collect()
