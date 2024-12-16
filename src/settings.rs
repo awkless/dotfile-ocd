@@ -7,7 +7,7 @@ use std::{
 };
 use toml_edit::{
     visit::{visit_inline_table, visit_table_like_kv, Visit},
-    Item, Key, InlineTable,
+    Array, InlineTable, Item, Key, Table, Value,
 };
 
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
@@ -41,6 +41,51 @@ impl RepoSettings {
     pub fn with_bootstrap(mut self, bootstrap: BootstrapSettings) -> Self {
         self.bootstrap = Some(bootstrap);
         self
+    }
+
+    pub fn to_toml(&self) -> (Key, Item) {
+        let mut repo_opts = Table::new();
+        let mut bootstrap_opts = Table::new();
+
+        repo_opts.insert("branch", Item::Value(Value::from(&self.branch)));
+        repo_opts.insert("remote", Item::Value(Value::from(&self.remote)));
+
+        if let Some(worktree) = &self.worktree {
+            repo_opts.insert(
+                "worktree",
+                Item::Value(Value::from(worktree.to_string_lossy().into_owned())),
+            );
+        }
+
+        if let Some(bootstrap) = &self.bootstrap {
+            bootstrap_opts.insert("clone", Item::Value(Value::from(&bootstrap.clone)));
+
+            if let Some(os) = &bootstrap.os {
+                bootstrap_opts.insert("os", Item::Value(Value::from(os.to_string())));
+            }
+
+            if let Some(depends) = &bootstrap.depends {
+                bootstrap_opts.insert("depends", Item::Value(Value::Array(Array::from_iter(depends))));
+            }
+
+            if let Some(ignores) = &bootstrap.ignores {
+                bootstrap_opts.insert("ignores", Item::Value(Value::Array(Array::from_iter(ignores))));
+            }
+
+            if let Some(users) = &bootstrap.users {
+                bootstrap_opts.insert("users", Item::Value(Value::Array(Array::from_iter(users))));
+            }
+
+            if let Some(hosts) = &bootstrap.hosts {
+                bootstrap_opts.insert("hosts", Item::Value(Value::Array(Array::from_iter(hosts))));
+            }
+
+            repo_opts.insert("bootstrap", Item::Table(bootstrap_opts));
+        }
+
+        let key = Key::new(&self.name);
+        let value = Item::Table(repo_opts);
+        (key, value)
     }
 }
 
@@ -329,10 +374,7 @@ mod tests {
 
     #[report]
     #[rstest]
-    #[case::no_bootstrap(
-        RepoSettings::new("foo", "master", "origin")
-            .with_worktree("$HOME")
-    )]
+    #[case::no_bootstrap(RepoSettings::new("foo", "master", "origin").with_worktree("$HOME"))]
     #[case::with_bootstrap(
         RepoSettings::new("bar", "main", "upstream")
             .with_worktree("$HOME")
@@ -355,6 +397,51 @@ mod tests {
         assert_eq!(result, expect);
 
         Ok(())
+    }
+
+    #[rstest]
+    #[case::no_bootstrap(
+        RepoSettings::new("foo", "main", "origin").with_worktree("$HOME"),
+        indoc! {r#"
+            [foo]
+            branch = "main"
+            remote = "origin"
+            worktree = "$HOME"
+        "#},
+    )]
+    #[case::with_bootstrap(
+        RepoSettings::new("bar", "main", "upstream")
+            .with_worktree("$HOME")
+            .with_bootstrap(
+                BootstrapSettings::new("https://some/url")
+                    .with_os(OsKind::Unix)
+                    .with_depends(["baz", "raz"])
+                    .with_ignores(["README*", "LICENSE*"])
+                    .with_users(["awkless", "lovelace"])
+                    .with_hosts(["sedgwick", "dijkstra"])
+            ),
+        indoc! {r#"
+            [bar]
+            branch = "main"
+            remote = "upstream"
+            worktree = "$HOME"
+
+            [bar.bootstrap]
+            clone = "https://some/url"
+            os = "unix"
+            depends = ["baz", "raz"]
+            ignores = ["README*", "LICENSE*"]
+            users = ["awkless", "lovelace"]
+            hosts = ["sedgwick", "dijkstra"]
+        "#}
+    )]
+    fn repo_setings_to_toml_return_key_item(#[case] input: RepoSettings, #[case] expect: &str) {
+        let (key, item) = input.to_toml();
+        let mut doc = DocumentMut::new();
+        let table = doc.as_table_mut();
+        table.insert_formatted(&key, item);
+        table.set_implicit(true);
+        assert_eq!(doc.to_string(), expect);
     }
 
     #[report]
