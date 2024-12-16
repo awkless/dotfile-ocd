@@ -6,10 +6,14 @@ use log::trace;
 use snafu::prelude::*;
 use std::path::{Path, PathBuf};
 
+#[cfg(test)]
+use mockall::automock;
+
 /// Representation of a locator handler.
 ///
 /// Provides _expected_ paths to configuration data. Path validation is left to
 /// the caller to figure out.
+#[cfg_attr(test, automock)]
 pub trait Locator {
     fn home_dir(&self) -> &Path;
     fn config_dir(&self) -> &Path;
