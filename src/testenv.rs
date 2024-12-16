@@ -4,9 +4,73 @@
 use mkdirp::mkdirp;
 use snafu::{prelude::*, Whatever};
 use std::{
+    collections::HashMap,
     fs::{metadata, read_to_string, set_permissions, write},
     path::{Path, PathBuf},
 };
+use tempfile::{Builder as TempFileBuilder, TempDir};
+
+/// Harness to manage multiple file fixtures in temporary directory.
+pub struct FixtureHarness {
+    root: TempDir,
+    fixtures: HashMap<PathBuf, FileFixture>,
+}
+
+impl FixtureHarness {
+    /// Open new fixture harness in new temporary directory.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if temporary directory cannot be created for whatever reason.
+    pub fn open() -> Result<Self, Whatever> {
+        let root = TempFileBuilder::new()
+            .tempdir()
+            .with_whatever_context(|_| "Failed to construct temporary directory")?;
+        Ok(Self { root, fixtures: HashMap::new() })
+    }
+
+    /// Add new [`FileFixture`] into harness.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if file fixture cannot be created for whatever reason.
+    pub fn with_file(
+        mut self,
+        path: impl AsRef<Path>,
+        callback: impl FnOnce(FileFixtureBuilder) -> Result<FileFixture, Whatever>,
+    ) -> Result<Self, Whatever> {
+        let fixture = callback(FileFixture::builder(self.root.path().join(path.as_ref())))?;
+        self.fixtures.insert(fixture.as_path().into(), fixture);
+        Ok(self)
+    }
+
+    /// Get file fixture from harness.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if file fixture is not being tracked by harness.
+    pub fn get(&self, path: impl AsRef<Path>) -> Result<&FileFixture, Whatever> {
+        self.fixtures
+            .get(&self.root.path().join(path.as_ref()))
+            .whatever_context(format!("Fixture '{}' is not being tracked", path.as_ref().display()))
+    }
+
+    /// Get mutable file fixture from harness.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if file fixture is not being tracked by harness.
+    pub fn get_mut(&mut self, path: impl AsRef<Path>) -> Result<&mut FileFixture, Whatever> {
+        self.fixtures
+            .get_mut(&self.root.path().join(path.as_ref()))
+            .whatever_context(format!("Fixture '{}' is not being tracked", path.as_ref().display()))
+    }
+
+    /// Coerces to a [`Path`] slice.
+    pub fn as_path(&self) -> &Path {
+        self.root.path()
+    }
+}
 
 /// File fixture handler.
 ///
