@@ -63,6 +63,11 @@ where
 
         Ok(Self { doc, config, locator })
     }
+
+    /// Coerces to a [`Path`] slice.
+    pub fn as_path(&self) -> &Path {
+        self.config.location(self.locator)
+    }
 }
 
 impl<'cfg, C, L> Display for ConfigFile<'cfg, C, L>
@@ -222,6 +227,25 @@ mod tests {
         let config = ConfigFile::load(config_kind, &locator)
             .with_whatever_context(|_| "Failed to load configuration file")?;
         assert_eq!(config.to_string(), fixture.as_str());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::repo_config(RepoConfig)]
+    #[case::hook_cmd_config(CmdHookConfig)]
+    fn config_file_load_create_new_file(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: impl Config,
+    ) -> Result<(), Whatever> {
+        let config_dir = config_dir?;
+        let mut locator = MockLocator::new();
+        locator.expect_repos_config().return_const(config_dir.as_path().join("repos.toml"));
+        locator.expect_hooks_config().return_const(config_dir.as_path().join("hooks.toml"));
+
+        let config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        assert!(config.as_path().exists());
 
         Ok(())
     }
