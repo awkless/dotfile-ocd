@@ -3,9 +3,13 @@
 
 #![allow(dead_code)]
 
+mod config;
 mod locate;
 mod settings;
 mod toml;
+
+#[cfg(test)]
+mod testenv;
 
 use env_logger::Builder as EnvLogBuilder;
 use log::{error, LevelFilter};
