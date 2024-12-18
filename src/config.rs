@@ -377,4 +377,25 @@ mod tests {
 
         Ok(())
     }
+
+    #[report]
+    #[rstest]
+    #[case::repo_config(RepoConfig::new("repos.toml"))]
+    #[case::cmd_hook_config(CmdHookConfig::new("hooks.toml"))]
+    fn config_file_save_crates_new_file(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] mut config_strat: impl Config,
+    ) -> Result<(), Whatever> {
+        let config_dir = config_dir?;
+        let mut locator = MockLocator::new();
+        locator.expect_config_dir().return_const(config_dir.as_path().into());
+        config_strat.with_locator(&locator);
+
+        let doc: Toml = "# Save me!".parse().with_whatever_context(|_| "Failed to parse TOML")?;
+        let mut config = ConfigFile { doc, config: config_strat };
+        config.save().with_whatever_context(|_| "Failed to save configuration file")?;
+        assert!(config.as_path().exists());
+
+        Ok(())
+    }
 }
