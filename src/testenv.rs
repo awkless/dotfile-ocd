@@ -66,6 +66,19 @@ impl FixtureHarness {
             .whatever_context(format!("Fixture '{}' is not being tracked", path.as_ref().display()))
     }
 
+    /// Syncronize all tracked fixtures.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if file fixture cannot be synced.
+    pub fn sync_tracked(&mut self) -> Result<(), Whatever> {
+        for (_, fixture) in self.fixtures.iter_mut() {
+            fixture.sync()?;
+        }
+
+        Ok(())
+    }
+
     /// Coerces to a [`Path`] slice.
     pub fn as_path(&self) -> &Path {
         self.root.path()
