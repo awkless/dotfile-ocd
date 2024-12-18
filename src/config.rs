@@ -3,19 +3,19 @@
 
 use crate::{
     locate::Locator,
+    settings::{CmdHookSettings, RepoSettings, Settings},
     toml::{Toml, TomlError},
-    settings::{RepoSettings, CmdHookSettings},
 };
 
-use snafu::prelude::*;
-use std::{
-    path::{PathBuf, Path},
-    fmt::{Debug, Display, Formatter, Result as FmtResult},
-    fs::OpenOptions,
-    io::{Read, Write, Error as IoError},
-};
 use log::debug;
 use mkdirp::mkdirp;
+use snafu::prelude::*;
+use std::{
+    fmt::{Debug, Display, Formatter, Result as FmtResult},
+    fs::OpenOptions,
+    io::{Error as IoError, Read, Write},
+    path::{Path, PathBuf},
+};
 
 /// Format preserving configuration file handler.
 #[derive(Clone, Debug)]
@@ -80,6 +80,18 @@ where
         Ok(())
     }
 
+    pub fn get(&self, key: impl AsRef<str>) -> Result<C::Entry, ConfigError> {
+        self.config.get(&self.doc, key.as_ref())
+    }
+
+    pub fn add(&mut self, entry: C::Entry) -> Result<Option<C::Entry>, ConfigError> {
+        self.config.add(&mut self.doc, entry)
+    }
+
+    pub fn remove(&mut self, key: impl AsRef<str>) -> Result<C::Entry, ConfigError> {
+        self.config.remove(&mut self.doc, key.as_ref())
+    }
+
     /// Coerces to a [`Path`] slice.
     pub fn as_path(&self) -> &Path {
         self.config.as_path()
@@ -99,16 +111,16 @@ where
 ///
 /// Interface to simplify serialization and deserialization of parsed TOML data.
 pub trait Config: Debug {
-    type Entry;
+    type Entry: Settings;
 
     fn get(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError>;
-    fn add(&self, doc: &Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError>;
-    fn remove(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError>;
-    fn with_locator<'cfg>(&mut self, locator: &'cfg impl Locator);
+    fn add(&self, doc: &mut Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError>;
+    fn remove(&self, doc: &mut Toml, key: &str) -> Result<Self::Entry, ConfigError>;
     fn as_path(&self) -> &Path;
+    fn with_locator<'cfg>(&mut self, locator: &'cfg impl Locator);
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct RepoConfig {
     path: PathBuf,
 }
@@ -123,15 +135,27 @@ impl Config for RepoConfig {
     type Entry = RepoSettings;
 
     fn get(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError> {
-        todo!();
+        let entry = doc
+            .get("repos", key)
+            .context(TomlSnafu { path: self.path.to_path_buf() })?;
+
+        Ok(RepoSettings::from(entry))
     }
 
-    fn add(&self, doc: &Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError> {
-        todo!();
+    fn add(&self, doc: &mut Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError> {
+        let entry = doc
+            .add("repos", entry.to_toml())
+            .context(TomlSnafu { path: self.path.to_path_buf() })?
+            .map(RepoSettings::from);
+        Ok(entry)
     }
 
-    fn remove(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError> {
-        todo!();
+    fn remove(&self, doc: &mut Toml, key: &str) -> Result<Self::Entry, ConfigError> {
+        let entry = doc
+            .remove("repos", key)
+            .context(TomlSnafu { path: self.path.to_path_buf() })?;
+
+        Ok(RepoSettings::from(entry))
     }
 
     fn as_path(&self) -> &Path {
@@ -143,7 +167,7 @@ impl Config for RepoConfig {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct CmdHookConfig {
     path: PathBuf,
 }
@@ -158,15 +182,28 @@ impl Config for CmdHookConfig {
     type Entry = CmdHookSettings;
 
     fn get(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError> {
-        todo!();
+        let entry = doc
+            .get("hooks", key)
+            .context(TomlSnafu { path: self.path.to_path_buf() })?;
+
+        Ok(CmdHookSettings::from(entry))
     }
 
-    fn add(&self, doc: &Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError> {
-        todo!();
+    fn add(&self, doc: &mut Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError> {
+        let entry = doc
+            .add("hooks", entry.to_toml())
+            .context(TomlSnafu { path: self.path.to_path_buf() })?
+            .map(CmdHookSettings::from);
+
+        Ok(entry)
     }
 
-    fn remove(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError> {
-        todo!();
+    fn remove(&self, doc: &mut Toml, key: &str) -> Result<Self::Entry, ConfigError> {
+        let entry = doc
+            .remove("hooks", key)
+            .context(TomlSnafu { path: self.path.to_path_buf() })?;
+
+        Ok(CmdHookSettings::from(entry))
     }
 
     fn as_path(&self) -> &Path {
@@ -207,14 +244,14 @@ enum InnerConfigError {
 mod tests {
     use super::*;
     use crate::{
-        testenv::{FixtureHarness, FileKind},
         locate::MockLocator,
+        testenv::{FileKind, FixtureHarness},
     };
 
-    use pretty_assertions::assert_eq;
-    use snafu::{report, Whatever};
-    use rstest::{fixture, rstest};
     use indoc::indoc;
+    use pretty_assertions::assert_eq;
+    use rstest::{fixture, rstest};
+    use snafu::{report, Whatever};
 
     #[fixture]
     fn config_dir() -> Result<FixtureHarness, Whatever> {
@@ -308,6 +345,35 @@ mod tests {
 
         let result = ConfigFile::load(config_strat);
         assert!(matches!(result.unwrap_err().0, InnerConfigError::Toml { .. }));
+
+        Ok(())
+    }
+
+    #[report]
+    #[rstest]
+    #[case::repo_config(
+        RepoConfig::new("repos.toml"),
+        "repos.toml",
+        RepoSettings::new("dwm", "main", "upstream").with_worktree("$HOME"),
+    )]
+    fn config_file_save_preserves_formatting<E: Settings, T: Config<Entry = E>>(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] mut config_strat: T,
+        #[case] fixture_name: &str,
+        #[case] setting: E,
+    ) -> Result<(), Whatever> {
+        let mut config_dir = config_dir?;
+        let mut locator = MockLocator::new();
+        locator.expect_config_dir().return_const(config_dir.as_path().to_path_buf());
+        config_strat.with_locator(&locator);
+
+        let mut config = ConfigFile::load(config_strat)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        config.add(setting).with_whatever_context(|_| "Failed to add setting")?;
+        config.save().with_whatever_context(|_| "Failed to save configuration file")?;
+        config_dir.sync_tracked()?;
+        let fixture = config_dir.get(fixture_name)?;
+        assert_eq!(config.to_string(), fixture.as_str());
 
         Ok(())
     }
