@@ -61,6 +61,25 @@ where
         Ok(Self { doc, config })
     }
 
+    pub fn save(&mut self) -> Result<(), ConfigError> {
+        let path = self.as_path();
+        debug!("Save configuration manager data to '{}'", self.as_path().display());
+        let root = path.parent().unwrap();
+        mkdirp(root).context(MakeDirPSnafu { path: root.to_path_buf() })?;
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .read(true)
+            .create(true)
+            .open(self.as_path())
+            .context(FileOpenSnafu { path: path.to_path_buf() })?;
+        let buffer = self.doc.to_string();
+        file.write_all(buffer.as_bytes()).context(FileWriteSnafu { path: path.to_path_buf() })?;
+
+        Ok(())
+    }
+
     /// Coerces to a [`Path`] slice.
     pub fn as_path(&self) -> &Path {
         self.config.as_path()
@@ -176,6 +195,9 @@ enum InnerConfigError {
 
     #[snafu(display("Failed to read '{}'", path.display()))]
     FileRead { path: PathBuf, source: IoError },
+
+    #[snafu(display("Failed to write '{}'", path.display()))]
+    FileWrite { path: PathBuf, source: IoError },
 
     #[snafu(display("Failed to parse '{}'", path.display()))]
     Toml { path: PathBuf, source: TomlError },
