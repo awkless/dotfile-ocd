@@ -4,9 +4,6 @@
 #![allow(dead_code)]
 
 mod config;
-mod locate;
-mod settings;
-mod toml;
 
 #[cfg(test)]
 mod testenv;
