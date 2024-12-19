@@ -19,6 +19,8 @@ pub trait Locator {
     fn config_dir(&self) -> &Path;
     fn hooks_dir(&self) -> &Path;
     fn repos_dir(&self) -> &Path;
+    fn repo_config_file(&self) -> &Path;
+    fn hook_config_file(&self) -> &Path;
 }
 
 /// Locator type that uses XDG Base Directory specification.
@@ -28,6 +30,8 @@ pub struct XdgLocator {
     config_dir: PathBuf,
     hooks_dir: PathBuf,
     repos_dir: PathBuf,
+    repo_config_file: PathBuf,
+    hook_config_file: PathBuf,
 }
 
 impl XdgLocator {
@@ -45,7 +49,9 @@ impl XdgLocator {
         let config_dir = layout.config_dir().join("dotfiles-ocd");
         let hooks_dir = config_dir.join("hooks");
         let repos_dir = layout.data_dir().join("dotfiles-ocd");
-        Ok(Self { layout, config_dir, hooks_dir, repos_dir })
+        let repo_config_file = config_dir.join("repos.toml");
+        let hook_config_file = config_dir.join("hooks.toml");
+        Ok(Self { layout, config_dir, hooks_dir, repos_dir, repo_config_file, hook_config_file })
     }
 }
 
@@ -64,6 +70,13 @@ impl Locator for XdgLocator {
 
     fn repos_dir(&self) -> &Path {
         &self.repos_dir
+    }
+
+    fn repo_config_file(&self) -> &Path {
+        &self.repo_config_file
+    }
+    fn hook_config_file(&self) -> &Path {
+        &self.hook_config_file
     }
 }
 

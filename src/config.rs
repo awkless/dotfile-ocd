@@ -19,17 +19,20 @@ use std::{
 
 /// Format preserving configuration file handler.
 #[derive(Clone, Debug)]
-pub struct ConfigFile<C>
+pub struct ConfigFile<'cfg, C, L>
 where
     C: Config,
+    L: Locator,
 {
     doc: Toml,
     config: C,
+    locator: &'cfg L,
 }
 
-impl<C> ConfigFile<C>
+impl<'cfg, C, L> ConfigFile<'cfg, C, L>
 where
     C: Config,
+    L: Locator,
 {
     /// Load new configuration file.
     ///
@@ -41,8 +44,8 @@ where
     ///
     /// Will fail if parent directory cannot be created when needed, or
     /// configuration file cannot be opened, read, and/or parsed at all.
-    pub fn load(config: C) -> Result<Self, ConfigError> {
-        let path = config.as_path();
+    pub fn load(config: C, locator: &'cfg L) -> Result<Self, ConfigError> {
+        let path = config.location(locator);
         debug!("Load new configuration file from '{}'", path.display());
         let root = path.parent().unwrap();
         mkdirp(root).context(MakeDirPSnafu { path: root.to_path_buf() })?;
@@ -58,9 +61,19 @@ where
         file.read_to_string(&mut buffer).context(FileReadSnafu { path: path.to_path_buf() })?;
         let doc = buffer.parse().context(TomlSnafu { path: path.to_path_buf() })?;
 
-        Ok(Self { doc, config })
+        Ok(Self { doc, config, locator })
     }
 
+    /// Save current data to configuration file.
+    ///
+    /// If path to configuration file does not exist, then it will created at
+    /// target location. Otherwise, configuration file will be written to like
+    /// normal.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if parent directory cannot be created when needed, or
+    /// configuration file cannot be opened, or written to for whatever reason.
     pub fn save(&mut self) -> Result<(), ConfigError> {
         let path = self.as_path();
         debug!("Save configuration manager data to '{}'", self.as_path().display());
@@ -80,27 +93,52 @@ where
         Ok(())
     }
 
+    /// Get configuration setting.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if configuration setting does not exist, or target table
+    /// setting does not exist or was not defined as a table.
     pub fn get(&self, key: impl AsRef<str>) -> Result<C::Entry, ConfigError> {
-        self.config.get(&self.doc, key.as_ref())
+        self.config.get(self.locator, &self.doc, key.as_ref())
     }
 
+    /// Add configuration setting.
+    ///
+    /// If entry already exists, then it will be replaced with the original
+    /// entry being returned. Otherwise, the entry will be added in with [`None`]
+    /// being returned to indicate that no replacement took place.
+    ///
+    /// Will create table data if needed in case it does not exist for whatever
+    /// reason.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if table setting is defined but not defined as a table.
     pub fn add(&mut self, entry: C::Entry) -> Result<Option<C::Entry>, ConfigError> {
-        self.config.add(&mut self.doc, entry)
+        self.config.add(self.locator, &mut self.doc, entry)
     }
 
+    /// Remove configuration setting.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if configuration setting does not exist, or target table
+    /// setting does not exist or was not defined as a table.
     pub fn remove(&mut self, key: impl AsRef<str>) -> Result<C::Entry, ConfigError> {
-        self.config.remove(&mut self.doc, key.as_ref())
+        self.config.remove(self.locator, &mut self.doc, key.as_ref())
     }
 
     /// Coerces to a [`Path`] slice.
     pub fn as_path(&self) -> &Path {
-        self.config.as_path()
+        self.config.location(self.locator)
     }
 }
 
-impl<C> Display for ConfigFile<C>
+impl<C, L> Display for ConfigFile<'_, C, L>
 where
     C: Config,
+    L: Locator,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{}", self.doc)
@@ -113,105 +151,129 @@ where
 pub trait Config: Debug {
     type Entry: Settings;
 
-    fn get(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError>;
-    fn add(&self, doc: &mut Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError>;
-    fn remove(&self, doc: &mut Toml, key: &str) -> Result<Self::Entry, ConfigError>;
-    fn as_path(&self) -> &Path;
-    fn with_locator<'cfg>(&mut self, locator: &'cfg impl Locator);
+    fn get(
+        &self,
+        locator: &impl Locator,
+        doc: &Toml,
+        key: &str,
+    ) -> Result<Self::Entry, ConfigError>;
+
+    fn add(
+        &self,
+        locator: &impl Locator,
+        doc: &mut Toml,
+        entry: Self::Entry,
+    ) -> Result<Option<Self::Entry>, ConfigError>;
+
+    fn remove(
+        &self,
+        locator: &impl Locator,
+        doc: &mut Toml,
+        key: &str,
+    ) -> Result<Self::Entry, ConfigError>;
+
+    fn location<'cfg>(&self, locator: &'cfg impl Locator) -> &'cfg Path;
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct RepoConfig {
-    path: PathBuf,
-}
-
-impl RepoConfig {
-    pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
-    }
-}
+pub struct RepoConfig;
 
 impl Config for RepoConfig {
     type Entry = RepoSettings;
 
-    fn get(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError> {
+    fn get(
+        &self,
+        locator: &impl Locator,
+        doc: &Toml,
+        key: &str,
+    ) -> Result<Self::Entry, ConfigError> {
         let entry = doc
             .get("repos", key)
-            .context(TomlSnafu { path: self.path.to_path_buf() })?;
+            .context(TomlSnafu { path: self.location(locator).to_path_buf() })?;
 
         Ok(RepoSettings::from(entry))
     }
 
-    fn add(&self, doc: &mut Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError> {
+    fn add(
+        &self,
+        locator: &impl Locator,
+        doc: &mut Toml,
+        entry: Self::Entry,
+    ) -> Result<Option<Self::Entry>, ConfigError> {
         let entry = doc
             .add("repos", entry.to_toml())
-            .context(TomlSnafu { path: self.path.to_path_buf() })?
+            .context(TomlSnafu { path: self.location(locator).to_path_buf() })?
             .map(RepoSettings::from);
+
         Ok(entry)
     }
 
-    fn remove(&self, doc: &mut Toml, key: &str) -> Result<Self::Entry, ConfigError> {
+    fn remove(
+        &self,
+        locator: &impl Locator,
+        doc: &mut Toml,
+        key: &str,
+    ) -> Result<Self::Entry, ConfigError> {
         let entry = doc
             .remove("repos", key)
-            .context(TomlSnafu { path: self.path.to_path_buf() })?;
+            .context(TomlSnafu { path: self.location(locator).to_path_buf() })?;
 
         Ok(RepoSettings::from(entry))
     }
 
-    fn as_path(&self) -> &Path {
-        &self.path
-    }
-
-    fn with_locator<'cfg>(&mut self, locator: &'cfg impl Locator) {
-        self.path = locator.config_dir().join(&self.path);
+    fn location<'cfg>(&self, locator: &'cfg impl Locator) -> &'cfg Path {
+        locator.repo_config_file()
     }
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct CmdHookConfig {
-    path: PathBuf,
-}
-
-impl CmdHookConfig {
-    pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
-    }
-}
+pub struct CmdHookConfig;
 
 impl Config for CmdHookConfig {
     type Entry = CmdHookSettings;
 
-    fn get(&self, doc: &Toml, key: &str) -> Result<Self::Entry, ConfigError> {
+    fn get(
+        &self,
+        locator: &impl Locator,
+        doc: &Toml,
+        key: &str,
+    ) -> Result<Self::Entry, ConfigError> {
         let entry = doc
             .get("hooks", key)
-            .context(TomlSnafu { path: self.path.to_path_buf() })?;
+            .context(TomlSnafu { path: self.location(locator).to_path_buf() })?;
 
         Ok(CmdHookSettings::from(entry))
     }
 
-    fn add(&self, doc: &mut Toml, entry: Self::Entry) -> Result<Option<Self::Entry>, ConfigError> {
+    fn add(
+        &self,
+        locator: &impl Locator,
+        doc: &mut Toml,
+        entry: Self::Entry,
+    ) -> Result<Option<Self::Entry>, ConfigError> {
         let entry = doc
             .add("hooks", entry.to_toml())
-            .context(TomlSnafu { path: self.path.to_path_buf() })?
+            .context(TomlSnafu { path: self.location(locator).to_path_buf() })?
             .map(CmdHookSettings::from);
 
         Ok(entry)
     }
 
-    fn remove(&self, doc: &mut Toml, key: &str) -> Result<Self::Entry, ConfigError> {
+    fn remove(
+        &self,
+        locator: &impl Locator,
+        doc: &mut Toml,
+        key: &str,
+    ) -> Result<Self::Entry, ConfigError> {
         let entry = doc
             .remove("hooks", key)
-            .context(TomlSnafu { path: self.path.to_path_buf() })?;
+            .context(TomlSnafu { path: self.location(locator).to_path_buf() })?;
 
         Ok(CmdHookSettings::from(entry))
     }
 
-    fn as_path(&self) -> &Path {
-        &self.path
-    }
-
-    fn with_locator<'cfg>(&mut self, locator: &'cfg impl Locator) {
-        self.path = locator.config_dir().join(&self.path);
+    fn location<'cfg>(&self, locator: &'cfg impl Locator) -> &'cfg Path {
+        locator.hook_config_file()
     }
 }
 
@@ -245,6 +307,7 @@ mod tests {
     use super::*;
     use crate::{
         locate::MockLocator,
+        settings::{HookSettings, Settings},
         testenv::{FileKind, FixtureHarness},
     };
 
@@ -256,28 +319,30 @@ mod tests {
     #[fixture]
     fn config_dir() -> Result<FixtureHarness, Whatever> {
         let harness = FixtureHarness::open()?
-            .with_file("repos.toml", |fixture| {
+            .with_file("config.toml", |fixture| {
                 fixture
                     .data(indoc! {r#"
                         # Formatting should remain the same!
+
                         [repos.vim]
                         branch = "master"
                         remote = "origin"
-                        workdir_home = true
+                        worktree = "$HOME"
+
+                        [hooks]
+                        bootstrap = [
+                            { pre = "hook.sh", post = "hook.sh", workdir = "/some/dir" },
+                            { pre = "hook.sh" }
+                        ]
                     "#})
                     .kind(FileKind::Normal)
                     .write()
             })?
-            .with_file("hooks.toml", |fixture| {
+            .with_file("not_table.toml", |fixture| {
                 fixture
                     .data(indoc! {r#"
-                        # Formatting should remain the same!
-                        [hooks]
-                        commit = [
-                            { pre = "hook.sh", post = "hook.sh", workdir = "/some/path" },
-                            { pre = "hook.sh" },
-                            { post = "hook.sh" }
-                        ]
+                        repos = 'not a table'
+                        hooks = 'not a table'
                     "#})
                     .kind(FileKind::Normal)
                     .write()
@@ -285,116 +350,361 @@ mod tests {
             .with_file("bad_format.toml", |fixture| {
                 fixture.data("this 'will fail!").kind(FileKind::Normal).write()
             })?;
+
         Ok(harness)
     }
 
-    #[report]
     #[rstest]
-    #[case::repo_config(RepoConfig::new("repos.toml"), "repos.toml")]
-    #[case::cmd_hook_config(CmdHookConfig::new("hooks.toml"), "hooks.toml")]
+    #[case::repo_config(RepoConfig)]
+    #[case::cmd_hook_config(CmdHookConfig)]
+    #[report]
     fn config_file_load_parse_file(
         config_dir: Result<FixtureHarness, Whatever>,
-        #[case] mut config_strat: impl Config,
-        #[case] fixture_name: &str,
+        #[case] config_kind: impl Config,
     ) -> Result<(), Whatever> {
         let config_dir = config_dir?;
-        let fixture = config_dir.get(fixture_name)?;
+        let fixture = config_dir.get("config.toml")?;
         let mut locator = MockLocator::new();
-        locator.expect_config_dir().return_const(config_dir.as_path().into());
-        config_strat.with_locator(&locator);
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
 
-        let config = ConfigFile::load(config_strat)
+        let config = ConfigFile::load(config_kind, &locator)
             .with_whatever_context(|_| "Failed to load configuration file")?;
         assert_eq!(config.to_string(), fixture.as_str());
 
         Ok(())
     }
 
-    #[report]
     #[rstest]
-    #[case::repo_config(RepoConfig::new("repos.toml"))]
-    #[case::hook_cmd_config(CmdHookConfig::new("hooks.toml"))]
+    #[case::repo_config(RepoConfig)]
+    #[case::hook_cmd_config(CmdHookConfig)]
+    #[report]
     fn config_file_load_create_new_file(
         config_dir: Result<FixtureHarness, Whatever>,
-        #[case] mut config_strat: impl Config,
+        #[case] config_kind: impl Config,
     ) -> Result<(), Whatever> {
         let config_dir = config_dir?;
         let mut locator = MockLocator::new();
-        locator.expect_config_dir().return_const(config_dir.as_path().into());
-        config_strat.with_locator(&locator);
+        locator.expect_repo_config_file().return_const(config_dir.as_path().join("repos.toml"));
+        locator.expect_hook_config_file().return_const(config_dir.as_path().join("hooks.toml"));
 
-        let config = ConfigFile::load(config_strat)
+        let config = ConfigFile::load(config_kind, &locator)
             .with_whatever_context(|_| "Failed to load configuration file")?;
         assert!(config.as_path().exists());
 
         Ok(())
     }
 
-    #[report]
     #[rstest]
-    #[case::repo_config(RepoConfig::new("bad_format.toml"))]
-    #[case::cmd_hook_config(CmdHookConfig::new("bad_format.toml"))]
+    #[case::repo_config(RepoConfig)]
+    #[case::cmd_hook_config(CmdHookConfig)]
+    #[report]
     fn config_file_load_return_err_toml(
         config_dir: Result<FixtureHarness, Whatever>,
-        #[case] mut config_strat: impl Config,
+        #[case] config_kind: impl Config,
     ) -> Result<(), Whatever> {
         let config_dir = config_dir?;
+        let fixture = config_dir.get("bad_format.toml")?;
         let mut locator = MockLocator::new();
-        locator.expect_config_dir().return_const(config_dir.as_path().into());
-        config_strat.with_locator(&locator);
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
 
-        let result = ConfigFile::load(config_strat);
+        let result = ConfigFile::load(config_kind, &locator);
         assert!(matches!(result.unwrap_err().0, InnerConfigError::Toml { .. }));
 
         Ok(())
     }
 
-    #[report]
     #[rstest]
     #[case::repo_config(
-        RepoConfig::new("repos.toml"),
-        "repos.toml",
-        RepoSettings::new("dwm", "main", "upstream").with_worktree("$HOME"),
+        RepoConfig,
+        RepoSettings::new("dwm", "main", "upstream").with_worktree("$HOME")
     )]
-    fn config_file_save_preserves_formatting<E: Settings, T: Config<Entry = E>>(
+    #[case::cmd_hook_config(
+        CmdHookConfig,
+        CmdHookSettings::new("commit").add_hook(HookSettings::new().with_post("hook.sh")),
+    )]
+    #[report]
+    fn config_file_save_preserves_formatting<E, T>(
         config_dir: Result<FixtureHarness, Whatever>,
-        #[case] mut config_strat: T,
-        #[case] fixture_name: &str,
-        #[case] setting: E,
-    ) -> Result<(), Whatever> {
+        #[case] config_kind: T,
+        #[case] expect: E,
+    ) -> Result<(), Whatever>
+    where
+        E: Settings,
+        T: Config<Entry = E>,
+    {
         let mut config_dir = config_dir?;
+        let fixture = config_dir.get_mut("config.toml")?;
         let mut locator = MockLocator::new();
-        locator.expect_config_dir().return_const(config_dir.as_path().to_path_buf());
-        config_strat.with_locator(&locator);
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
 
-        let mut config = ConfigFile::load(config_strat)
+        let mut config = ConfigFile::load(config_kind, &locator)
             .with_whatever_context(|_| "Failed to load configuration file")?;
-        config.add(setting).with_whatever_context(|_| "Failed to add setting")?;
+        config.add(expect).with_whatever_context(|_| "Failed to add setting")?;
         config.save().with_whatever_context(|_| "Failed to save configuration file")?;
-        config_dir.sync_tracked()?;
-        let fixture = config_dir.get(fixture_name)?;
+        fixture.sync()?;
         assert_eq!(config.to_string(), fixture.as_str());
 
         Ok(())
     }
 
-    #[report]
     #[rstest]
-    #[case::repo_config(RepoConfig::new("repos.toml"))]
-    #[case::cmd_hook_config(CmdHookConfig::new("hooks.toml"))]
-    fn config_file_save_crates_new_file(
+    #[case::repo_config(RepoConfig)]
+    #[case::cmd_hook_config(CmdHookConfig)]
+    #[report]
+    fn config_file_save_create_new_file(
         config_dir: Result<FixtureHarness, Whatever>,
-        #[case] mut config_strat: impl Config,
+        #[case] config_kind: impl Config,
     ) -> Result<(), Whatever> {
         let config_dir = config_dir?;
         let mut locator = MockLocator::new();
-        locator.expect_config_dir().return_const(config_dir.as_path().into());
-        config_strat.with_locator(&locator);
+        locator.expect_repo_config_file().return_const(config_dir.as_path().join("repos.toml"));
+        locator.expect_hook_config_file().return_const(config_dir.as_path().join("hooks.toml"));
 
-        let doc: Toml = "# Save me!".parse().with_whatever_context(|_| "Failed to parse TOML")?;
-        let mut config = ConfigFile { doc, config: config_strat };
+        let mut config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
         config.save().with_whatever_context(|_| "Failed to save configuration file")?;
         assert!(config.as_path().exists());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::repo_config(
+        RepoConfig,
+        "vim",
+        RepoSettings::new("vim", "master", "origin").with_worktree("$HOME")
+    )]
+    #[case::repo_config(
+        CmdHookConfig,
+        "bootstrap",
+        CmdHookSettings::new("bootstrap")
+            .add_hook(
+                HookSettings::new()
+                    .with_pre("hook.sh")
+                    .with_post("hook.sh")
+                    .with_workdir("/some/dir")
+            )
+            .add_hook(HookSettings::new().with_pre("hook.sh")),
+    )]
+    #[report]
+    fn config_file_get_return_setting<E, T>(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: T,
+        #[case] key: &str,
+        #[case] expect: E,
+    ) -> Result<(), Whatever>
+    where
+        E: Settings,
+        T: Config<Entry = E>,
+    {
+        let config_dir = config_dir?;
+        let fixture = config_dir.get("config.toml")?;
+        let mut locator = MockLocator::new();
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
+
+        let config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        let result = config.get(key).with_whatever_context(|_| "Failed to get setting")?;
+        assert_eq!(result, expect);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::repo_config(RepoConfig)]
+    #[case::cmd_hook_config(CmdHookConfig)]
+    #[report]
+    fn config_file_get_return_err_toml(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: impl Config,
+    ) -> Result<(), Whatever> {
+        let config_dir = config_dir?;
+        let fixture = config_dir.get("config.toml")?;
+        let mut locator = MockLocator::new();
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
+
+        let config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        let result = config.get("non-existent");
+        assert!(matches!(result.unwrap_err().0, InnerConfigError::Toml { .. }));
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::repo_config(
+        RepoConfig,
+        RepoSettings::new("dwm", "main", "upstream").with_worktree("$HOME")
+    )]
+    #[case::cmd_hook_config(
+        CmdHookConfig,
+        CmdHookSettings::new("commit").add_hook(HookSettings::new().with_post("hook.sh")),
+    )]
+    #[report]
+    fn config_file_new_return_none<E, T>(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: T,
+        #[case] entry: E,
+    ) -> Result<(), Whatever>
+    where
+        E: Settings,
+        T: Config<Entry = E>,
+    {
+        let mut config_dir = config_dir?;
+        let fixture = config_dir.get_mut("config.toml")?;
+        let mut locator = MockLocator::new();
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
+
+        let mut config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        let result = config.add(entry).with_whatever_context(|_| "Failed to add setting")?;
+        config.save().with_whatever_context(|_| "Failed to save configuration file")?;
+        fixture.sync()?;
+        assert_eq!(result, None);
+        assert_eq!(config.to_string(), fixture.as_str());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::repo_config(
+        RepoConfig,
+        RepoSettings::new("vim", "main", "upstream").with_worktree("$HOME"),
+        Some(RepoSettings::new("vim", "master", "origin").with_worktree("$HOME")),
+    )]
+    #[case::cmd_hook_config(
+        CmdHookConfig,
+        CmdHookSettings::new("bootstrap")
+            .add_hook(HookSettings::new().with_pre("new_hook.sh").with_post("new_hook.sh"))
+            .add_hook(HookSettings::new().with_pre("new_hook.sh").with_workdir("/new/dir")),
+        Some(CmdHookSettings::new("bootstrap")
+            .add_hook(
+                HookSettings::new()
+                    .with_pre("hook.sh")
+                    .with_post("hook.sh")
+                    .with_workdir("/some/dir")
+            )
+            .add_hook(HookSettings::new().with_pre("hook.sh"))),
+    )]
+    #[report]
+    fn config_file_new_return_some<E, T>(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: T,
+        #[case] entry: E,
+        #[case] expect: Option<E>,
+    ) -> Result<(), Whatever>
+    where
+        E: Settings,
+        T: Config<Entry = E>,
+    {
+        let mut config_dir = config_dir?;
+        let fixture = config_dir.get_mut("config.toml")?;
+        let mut locator = MockLocator::new();
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
+
+        let mut config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        let result = config.add(entry).with_whatever_context(|_| "Failed to add setting")?;
+        config.save().with_whatever_context(|_| "Failed to save configuration file")?;
+        fixture.sync()?;
+        assert_eq!(result, expect);
+        assert_eq!(config.to_string(), fixture.as_str());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::repo_config(RepoConfig)]
+    #[case::cmd_hook_config(CmdHookConfig)]
+    #[report]
+    fn config_file_add_return_err_toml(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: impl Config,
+    ) -> Result<(), Whatever> {
+        let mut config_dir = config_dir?;
+        let fixture = config_dir.get_mut("not_table.toml")?;
+        let mut locator = MockLocator::new();
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
+
+        let mut config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        let result = config.add(Default::default());
+        assert!(matches!(result.unwrap_err().0, InnerConfigError::Toml { .. }));
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::repo_config(
+        RepoConfig,
+        "vim",
+        RepoSettings::new("vim", "master", "origin").with_worktree("$HOME"),
+    )]
+    #[case::cmd_hook_config(
+        CmdHookConfig,
+        "bootstrap",
+        CmdHookSettings::new("bootstrap")
+            .add_hook(
+                HookSettings::new()
+                    .with_pre("hook.sh")
+                    .with_post("hook.sh")
+                    .with_workdir("/some/dir")
+            )
+            .add_hook(HookSettings::new().with_pre("hook.sh")),
+    )]
+    #[report]
+    fn config_file_remove_return_deleted_setting<E, T>(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: T,
+        #[case] key: &str,
+        #[case] expect: E,
+    ) -> Result<(), Whatever>
+    where
+        E: Settings,
+        T: Config<Entry = E>,
+    {
+        let mut config_dir = config_dir?;
+        let fixture = config_dir.get_mut("config.toml")?;
+        let mut locator = MockLocator::new();
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
+
+        let mut config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        let result = config.remove(key).with_whatever_context(|_| "Failed to remove setting")?;
+        config.save().with_whatever_context(|_| "Failed to save configuration file")?;
+        fixture.sync()?;
+        assert_eq!(result, expect);
+        assert_eq!(config.to_string(), fixture.as_str());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::repo_config(RepoConfig)]
+    #[case::cmd_hook_config(CmdHookConfig)]
+    #[report]
+    fn config_file_remove_return_err_toml(
+        config_dir: Result<FixtureHarness, Whatever>,
+        #[case] config_kind: impl Config,
+    ) -> Result<(), Whatever> {
+        let config_dir = config_dir?;
+        let fixture = config_dir.get("not_table.toml")?;
+        let mut locator = MockLocator::new();
+        locator.expect_repo_config_file().return_const(fixture.as_path().into());
+        locator.expect_hook_config_file().return_const(fixture.as_path().into());
+
+        let mut config = ConfigFile::load(config_kind, &locator)
+            .with_whatever_context(|_| "Failed to load configuration file")?;
+        let result = config.remove("fail");
+        assert!(matches!(result.unwrap_err().0, InnerConfigError::Toml { .. }));
 
         Ok(())
     }
