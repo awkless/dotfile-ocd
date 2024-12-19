@@ -2,13 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 use std::{
-    fmt::{Display, Formatter, Result as FmtResult},
+    cmp::PartialEq,
+    fmt::{Debug, Display, Formatter, Result as FmtResult},
     path::PathBuf,
 };
 use toml_edit::{
     visit::{visit_inline_table, visit_table_like_kv, Visit},
     Array, InlineTable, Item, Key, Table, Value,
 };
+
+pub trait Settings: From<(Key, Item)> + Default + Debug + PartialEq {
+    fn to_toml(&self) -> (Key, Item);
+}
 
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct RepoSettings {
@@ -42,8 +47,10 @@ impl RepoSettings {
         self.bootstrap = Some(bootstrap);
         self
     }
+}
 
-    pub fn to_toml(&self) -> (Key, Item) {
+impl Settings for RepoSettings {
+    fn to_toml(&self) -> (Key, Item) {
         let mut repo_opts = Table::new();
         let mut bootstrap_opts = Table::new();
 
@@ -259,7 +266,9 @@ impl CmdHookSettings {
         self.hooks.push(hook);
         self
     }
+}
 
+impl Settings for CmdHookSettings {
     fn to_toml(&self) -> (Key, Item) {
         let mut tables = Array::new();
         let mut iter = self.hooks.iter().enumerate().peekable();
