@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
-use crate::{
-    locate::Locator,
-    settings::{CmdHookSettings, RepoSettings, Settings},
-    toml::{Toml, TomlError},
-};
+mod locate;
+mod settings;
+mod toml;
+
+#[doc(inline)]
+pub use locate::*;
+pub use settings::*;
+pub use toml::*;
 
 use log::debug;
 use mkdirp::mkdirp;
@@ -305,11 +308,7 @@ enum InnerConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        locate::MockLocator,
-        settings::{HookSettings, Settings},
-        testenv::{FileKind, FixtureHarness},
-    };
+    use crate::testenv::{FileKind, FixtureHarness};
 
     use indoc::indoc;
     use pretty_assertions::assert_eq;
