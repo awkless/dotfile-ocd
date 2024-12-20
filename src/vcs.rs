@@ -1,13 +1,9 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
-use std::{
-    ffi::OsString,
-    process::Command,
-    io::Error as IoError,
-};
-use snafu::prelude::*;
 use log::info;
+use snafu::prelude::*;
+use std::{ffi::OsString, io::Error as IoError, process::Command};
 
 /// Git binary handler.
 ///
@@ -74,9 +70,9 @@ enum InnerGitError {
 mod tests {
     use super::*;
 
+    use pretty_assertions::assert_eq;
     use rstest::rstest;
     use snafu::{report, Whatever};
-    use pretty_assertions::assert_eq;
 
     #[rstest]
     #[report]

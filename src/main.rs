@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 mod config;
+mod vcs;
 
 #[cfg(test)]
 mod testenv;
