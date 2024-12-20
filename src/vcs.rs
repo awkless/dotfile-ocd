@@ -89,4 +89,12 @@ mod tests {
 
         Ok(())
     }
+
+    #[rstest]
+    fn git_run_return_err() {
+        let mut git = Git::new();
+        git.with_args(["unknown-cmd", "--fail"]);
+        let result = git.run();
+        assert!(matches!(result.unwrap_err().0, InnerGitError::GitBin { .. }));
+    }
 }
