@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "dotfile-ocd"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "directories",
  "env_logger",
