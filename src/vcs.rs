@@ -18,7 +18,7 @@ impl Git {
         todo!();
     }
 
-    pub fn run(&self) -> Result<(), GitError> {
+    pub fn run(&self) -> Result<String, GitError> {
         todo!();
     }
 }
@@ -36,4 +36,19 @@ enum InnerGitError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use rstest::rstest;
+    use snafu::{report, Whatever};
+    use pretty_assertions::assert_eq;
+
+    #[rstest]
+    #[report]
+    fn git_run_return_str() -> Result<(), Whatever> {
+        let result = Git::new().with_args(["ls-files", "--", "README.md"]).run()
+            .with_whatever_context(|_| "Failed to run Git binary")?;
+        let expect = "README.md".to_string();
+        assert_eq!(result, expect);
+
+        Ok(())
+    }
 }
