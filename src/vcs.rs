@@ -20,6 +20,11 @@ impl Git {
         Default::default()
     }
 
+    /// Add single argument to pass to Git binary.
+    pub fn with_arg(&mut self, arg: impl Into<OsString>) {
+        self.args.push(arg.into());
+    }
+
     /// Add arguments to pass to Git binary.
     pub fn with_args(&mut self, args: impl IntoIterator<Item = impl Into<OsString>>) {
         self.args.extend(args.into_iter().map(Into::into));
