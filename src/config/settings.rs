@@ -20,7 +20,7 @@ pub struct RepoSettings {
     pub name: String,
     pub branch: String,
     pub remote: String,
-    pub worktree: Option<PathBuf>,
+    pub bare_alias: Option<PathBuf>,
     pub bootstrap: Option<BootstrapSettings>,
 }
 
@@ -38,8 +38,8 @@ impl RepoSettings {
         }
     }
 
-    pub fn with_worktree(mut self, worktree: impl Into<PathBuf>) -> Self {
-        self.worktree = Some(worktree.into());
+    pub fn with_bare_alias(mut self, bare_alias: impl Into<PathBuf>) -> Self {
+        self.bare_alias = Some(bare_alias.into());
         self
     }
 
@@ -57,10 +57,10 @@ impl Settings for RepoSettings {
         repo_opts.insert("branch", Item::Value(Value::from(&self.branch)));
         repo_opts.insert("remote", Item::Value(Value::from(&self.remote)));
 
-        if let Some(worktree) = &self.worktree {
+        if let Some(bare_alias) = &self.bare_alias {
             repo_opts.insert(
-                "worktree",
-                Item::Value(Value::from(worktree.to_string_lossy().into_owned())),
+                "bare_alias",
+                Item::Value(Value::from(bare_alias.to_string_lossy().into_owned())),
             );
         }
 
@@ -123,7 +123,7 @@ impl<'toml> Visit<'toml> for RepoSettings {
         match key {
             "branch" => self.branch = node.as_str().unwrap_or("master").into(),
             "remote" => self.remote = node.as_str().unwrap_or("origin").into(),
-            "worktree" => self.worktree = node.as_str().map(|s| s.into()),
+            "bare_alias" => self.bare_alias = node.as_str().map(|s| s.into()),
             "bootstrap" => {
                 let mut bootstrap = BootstrapSettings::default();
                 bootstrap.visit_item(node);
@@ -379,7 +379,7 @@ mod tests {
             [foo]
             branch = "master"
             remote = "origin"
-            worktree = "$HOME"
+            bare_alias = "$HOME"
 
             [foo.should_ignore_this]
             clone = "https://some/url"
@@ -388,7 +388,7 @@ mod tests {
             [bar]
             branch = "main"
             remote = "upstream"
-            worktree = "$HOME"
+            bare_alias = "$HOME"
 
             [bar.bootstrap]
             clone = "https://some/url"
@@ -417,10 +417,10 @@ mod tests {
 
     #[report]
     #[rstest]
-    #[case::no_bootstrap(RepoSettings::new("foo", "master", "origin").with_worktree("$HOME"))]
+    #[case::no_bootstrap(RepoSettings::new("foo", "master", "origin").with_bare_alias("$HOME"))]
     #[case::with_bootstrap(
         RepoSettings::new("bar", "main", "upstream")
-            .with_worktree("$HOME")
+            .with_bare_alias("$HOME")
             .with_bootstrap(
                 BootstrapSettings::new("https://some/url")
                     .with_os(OsKind::Unix)
@@ -444,17 +444,17 @@ mod tests {
 
     #[rstest]
     #[case::no_bootstrap(
-        RepoSettings::new("foo", "main", "origin").with_worktree("$HOME"),
+        RepoSettings::new("foo", "main", "origin").with_bare_alias("$HOME"),
         indoc! {r#"
             [foo]
             branch = "main"
             remote = "origin"
-            worktree = "$HOME"
+            bare_alias = "$HOME"
         "#},
     )]
     #[case::with_bootstrap(
         RepoSettings::new("bar", "main", "upstream")
-            .with_worktree("$HOME")
+            .with_bare_alias("$HOME")
             .with_bootstrap(
                 BootstrapSettings::new("https://some/url")
                     .with_os(OsKind::Unix)
@@ -467,7 +467,7 @@ mod tests {
             [bar]
             branch = "main"
             remote = "upstream"
-            worktree = "$HOME"
+            bare_alias = "$HOME"
 
             [bar.bootstrap]
             clone = "https://some/url"

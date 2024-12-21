@@ -326,7 +326,7 @@ mod tests {
                         [repos.vim]
                         branch = "master"
                         remote = "origin"
-                        worktree = "$HOME"
+                        bare_alias = "$HOME"
 
                         [hooks]
                         bootstrap = [
@@ -417,7 +417,7 @@ mod tests {
     #[rstest]
     #[case::repo_config(
         RepoConfig,
-        RepoSettings::new("dwm", "main", "upstream").with_worktree("$HOME")
+        RepoSettings::new("dwm", "main", "upstream").with_bare_alias("$HOME")
     )]
     #[case::cmd_hook_config(
         CmdHookConfig,
@@ -474,7 +474,7 @@ mod tests {
     #[case::repo_config(
         RepoConfig,
         "vim",
-        RepoSettings::new("vim", "master", "origin").with_worktree("$HOME")
+        RepoSettings::new("vim", "master", "origin").with_bare_alias("$HOME")
     )]
     #[case::repo_config(
         CmdHookConfig,
@@ -538,7 +538,7 @@ mod tests {
     #[rstest]
     #[case::repo_config(
         RepoConfig,
-        RepoSettings::new("dwm", "main", "upstream").with_worktree("$HOME")
+        RepoSettings::new("dwm", "main", "upstream").with_bare_alias("$HOME")
     )]
     #[case::cmd_hook_config(
         CmdHookConfig,
@@ -574,8 +574,8 @@ mod tests {
     #[rstest]
     #[case::repo_config(
         RepoConfig,
-        RepoSettings::new("vim", "main", "upstream").with_worktree("$HOME"),
-        Some(RepoSettings::new("vim", "master", "origin").with_worktree("$HOME")),
+        RepoSettings::new("vim", "main", "upstream").with_bare_alias("$HOME"),
+        Some(RepoSettings::new("vim", "master", "origin").with_bare_alias("$HOME")),
     )]
     #[case::cmd_hook_config(
         CmdHookConfig,
@@ -644,7 +644,7 @@ mod tests {
     #[case::repo_config(
         RepoConfig,
         "vim",
-        RepoSettings::new("vim", "master", "origin").with_worktree("$HOME"),
+        RepoSettings::new("vim", "master", "origin").with_bare_alias("$HOME"),
     )]
     #[case::cmd_hook_config(
         CmdHookConfig,
