@@ -14,11 +14,13 @@ use log::debug;
 use mkdirp::mkdirp;
 use snafu::prelude::*;
 use std::{
+    vec::IntoIter as VecIntoIter,
     fmt::{Debug, Display, Formatter, Result as FmtResult},
     fs::OpenOptions,
     io::{Error as IoError, Read, Write},
     path::{Path, PathBuf},
 };
+use toml_edit::{Key, Item};
 
 /// Format preserving configuration file handler.
 #[derive(Clone, Debug)]
@@ -132,6 +134,20 @@ where
         self.config.remove(self.locator, &mut self.doc, key.as_ref())
     }
 
+    /// Return iterator over deserialized settings in configuration file.
+    ///
+    /// Yields all configuration settings in deserialized form from start to
+    /// end.
+    pub fn iter(&self) -> ConfigFileIterator<'_, C> {
+        let entries = if let Some(table) = self.doc.get_table(self.config.target_table()).ok() {
+            table.iter().map(|(key, value)| (Key::new(key), value.clone())).collect()
+        } else {
+            Vec::new()
+        };
+
+        ConfigFileIterator { config: &self.config, entries: entries.into_iter() }
+    }
+
     /// Coerces to a [`Path`] slice.
     pub fn as_path(&self) -> &Path {
         self.config.location(self.locator)
@@ -145,6 +161,27 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{}", self.doc)
+    }
+}
+
+pub struct ConfigFileIterator<'cfg, C>
+where
+    C: Config,
+{
+    config: &'cfg C,
+    entries: VecIntoIter<(Key, Item)>,
+}
+
+impl<'cfg, C> Iterator for ConfigFileIterator<'cfg, C>
+where
+    C: Config,
+{
+    type Item = C::Entry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.entries.next().and_then(|(key, value)| {
+            Some(C::Entry::from((key, value)))
+        })
     }
 }
 
@@ -176,6 +213,8 @@ pub trait Config: Debug {
     ) -> Result<Self::Entry, ConfigError>;
 
     fn location<'cfg>(&self, locator: &'cfg impl Locator) -> &'cfg Path;
+
+    fn target_table(&self) -> &str;
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
@@ -191,7 +230,7 @@ impl Config for RepoConfig {
         key: &str,
     ) -> Result<Self::Entry, ConfigError> {
         let entry = doc
-            .get("repos", key)
+            .get(self.target_table(), key)
             .context(TomlSnafu { path: self.location(locator).to_path_buf() })?;
 
         Ok(RepoSettings::from(entry))
@@ -204,7 +243,7 @@ impl Config for RepoConfig {
         entry: Self::Entry,
     ) -> Result<Option<Self::Entry>, ConfigError> {
         let entry = doc
-            .add("repos", entry.to_toml())
+            .add(self.target_table(), entry.to_toml())
             .context(TomlSnafu { path: self.location(locator).to_path_buf() })?
             .map(RepoSettings::from);
 
@@ -218,7 +257,7 @@ impl Config for RepoConfig {
         key: &str,
     ) -> Result<Self::Entry, ConfigError> {
         let entry = doc
-            .remove("repos", key)
+            .remove(self.target_table(), key)
             .context(TomlSnafu { path: self.location(locator).to_path_buf() })?;
 
         Ok(RepoSettings::from(entry))
@@ -226,6 +265,10 @@ impl Config for RepoConfig {
 
     fn location<'cfg>(&self, locator: &'cfg impl Locator) -> &'cfg Path {
         locator.repo_config_file()
+    }
+
+    fn target_table(&self) -> &str {
+        "repos"
     }
 }
 
@@ -242,7 +285,7 @@ impl Config for CmdHookConfig {
         key: &str,
     ) -> Result<Self::Entry, ConfigError> {
         let entry = doc
-            .get("hooks", key)
+            .get(self.target_table(), key)
             .context(TomlSnafu { path: self.location(locator).to_path_buf() })?;
 
         Ok(CmdHookSettings::from(entry))
@@ -255,7 +298,7 @@ impl Config for CmdHookConfig {
         entry: Self::Entry,
     ) -> Result<Option<Self::Entry>, ConfigError> {
         let entry = doc
-            .add("hooks", entry.to_toml())
+            .add(self.target_table(), entry.to_toml())
             .context(TomlSnafu { path: self.location(locator).to_path_buf() })?
             .map(CmdHookSettings::from);
 
@@ -269,7 +312,7 @@ impl Config for CmdHookConfig {
         key: &str,
     ) -> Result<Self::Entry, ConfigError> {
         let entry = doc
-            .remove("hooks", key)
+            .remove(self.target_table(), key)
             .context(TomlSnafu { path: self.location(locator).to_path_buf() })?;
 
         Ok(CmdHookSettings::from(entry))
@@ -277,6 +320,10 @@ impl Config for CmdHookConfig {
 
     fn location<'cfg>(&self, locator: &'cfg impl Locator) -> &'cfg Path {
         locator.hook_config_file()
+    }
+
+    fn target_table(&self) -> &str {
+        "hooks"
     }
 }
 
