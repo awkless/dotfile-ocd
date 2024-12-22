@@ -65,7 +65,7 @@ impl Toml {
 
         let entry = match self.get_table_mut(table.as_ref()) {
             Ok(table) => table,
-            Err(InnerTomlError::TableNotFound { .. }) => {
+            Err(TomlError(InnerTomlError::TableNotFound { .. })) => {
                 let mut new_table = Table::new();
                 new_table.set_implicit(true);
                 self.doc.insert(table.as_ref(), Item::Table(new_table));
@@ -100,14 +100,14 @@ impl Toml {
         Ok(entry)
     }
 
-    fn get_table(&self, key: &str) -> Result<&Table, InnerTomlError> {
+    pub fn get_table(&self, key: &str) -> Result<&Table, TomlError> {
         let table = self.doc.get(key).context(TableNotFoundSnafu { table: key })?;
         let table = table.as_table().context(NotTableSnafu { table: key })?;
 
         Ok(table)
     }
 
-    fn get_table_mut(&mut self, key: &str) -> Result<&mut Table, InnerTomlError> {
+    pub fn get_table_mut(&mut self, key: &str) -> Result<&mut Table, TomlError> {
         let table = self.doc.get_mut(key).context(TableNotFoundSnafu { table: key })?;
         let table = table.as_table_mut().context(NotTableSnafu { table: key })?;
 
