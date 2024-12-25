@@ -71,7 +71,7 @@ impl Toml {
                 self.doc.insert(table.as_ref(), Item::Table(new_table));
                 self.doc[table.as_ref()].as_table_mut().unwrap()
             }
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(err),
         };
         let entry = entry.insert(key.get(), value).map(|old| (key, old));
 

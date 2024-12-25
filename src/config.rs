@@ -14,13 +14,13 @@ use log::debug;
 use mkdirp::mkdirp;
 use snafu::prelude::*;
 use std::{
-    vec::IntoIter as VecIntoIter,
     fmt::{Debug, Display, Formatter, Result as FmtResult},
     fs::OpenOptions,
     io::{Error as IoError, Read, Write},
     path::{Path, PathBuf},
+    vec::IntoIter as VecIntoIter,
 };
-use toml_edit::{Key, Item};
+use toml_edit::{Item, Key};
 
 /// Format preserving configuration file handler.
 #[derive(Clone, Debug)]
@@ -139,7 +139,7 @@ where
     /// Yields all configuration settings in deserialized form from start to
     /// end.
     pub fn iter(&self) -> ConfigFileIterator<'_, C> {
-        let entries = if let Some(table) = self.doc.get_table(self.config.target_table()).ok() {
+        let entries = if let Ok(table) = self.doc.get_table(self.config.target_table()) {
             table.iter().map(|(key, value)| (Key::new(key), value.clone())).collect()
         } else {
             Vec::new()
@@ -172,16 +172,14 @@ where
     entries: VecIntoIter<(Key, Item)>,
 }
 
-impl<'cfg, C> Iterator for ConfigFileIterator<'cfg, C>
+impl<C> Iterator for ConfigFileIterator<'_, C>
 where
     C: Config,
 {
     type Item = C::Entry;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.entries.next().and_then(|(key, value)| {
-            Some(C::Entry::from((key, value)))
-        })
+        self.entries.next().map(|(key, value)| C::Entry::from((key, value)))
     }
 }
 
