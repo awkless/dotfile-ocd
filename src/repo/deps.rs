@@ -167,6 +167,7 @@ mod tests {
     use super::*;
 
     use rstest::rstest;
+    use pretty_assertions::assert_eq;
 
     #[rstest]
     fn dependencies_acyclic_check_return_err() {
@@ -191,5 +192,21 @@ mod tests {
         deps.add_edge("bar", "foo");
         let result = deps.acyclic_check();
         assert!(result.is_ok());
+    }
+
+    #[rstest]
+    fn dependencies_iter_dfs_produces_correct_path() {
+        let mut deps = Dependencies::new();
+        deps.add_vertex("vim");
+        deps.add_vertex("foo");
+        deps.add_vertex("bar");
+        deps.add_vertex("baz");
+        deps.add_edge("vim", "foo");
+        deps.add_edge("vim", "bar");
+        deps.add_edge("vim", "baz");
+        let expect = vec!["bar", "baz", "foo", "vim"];
+        let mut result = deps.iter_dfs("vim").collect::<Vec<String>>();
+        result.sort();
+        assert_eq!(result, expect);
     }
 }
