@@ -123,7 +123,7 @@ impl<'deps> DependenciesDfsIterator<'deps> {
     }
 }
 
-impl<'deps> Iterator for DependenciesDfsIterator<'deps> {
+impl Iterator for DependenciesDfsIterator<'_> {
     type Item = String;
 
     fn next(&mut self) -> Option<String> {
