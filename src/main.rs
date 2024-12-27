@@ -5,7 +5,6 @@
 
 mod config;
 mod repo;
-mod vcs;
 
 #[cfg(test)]
 mod testenv;

@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
-use crate::{
-    config::{ConfigError, ConfigFile, Locator, RepoConfig, RepoSettings},
-    vcs::Git,
-};
+mod vcs;
+
+#[doc(inline)]
+pub use vcs::*;
+
+use crate::config::{Locator, ConfigFile, RepoConfig, ConfigError, RepoSettings};
 
 use snafu::prelude::*;
 use std::collections::HashMap;
