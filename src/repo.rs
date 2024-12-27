@@ -4,11 +4,11 @@
 mod deps;
 mod vcs;
 
+pub use deps::*;
 #[doc(inline)]
 pub use vcs::*;
-pub use deps::*;
 
-use crate::config::{Locator, ConfigFile, RepoConfig, ConfigError, RepoSettings};
+use crate::config::{ConfigError, ConfigFile, Locator, RepoConfig, RepoSettings};
 
 use snafu::prelude::*;
 use std::collections::HashMap;

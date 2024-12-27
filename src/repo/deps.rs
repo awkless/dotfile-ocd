@@ -4,7 +4,7 @@
 use crate::config::{ConfigFile, Locator, RepoConfig};
 
 use snafu::prelude::*;
-use std::collections::{HashMap, VecDeque, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Handle repository dependencies.
 ///
@@ -166,8 +166,8 @@ enum InnerDependencyError {
 mod tests {
     use super::*;
 
-    use rstest::rstest;
     use pretty_assertions::assert_eq;
+    use rstest::rstest;
 
     #[rstest]
     fn dependencies_acyclic_check_return_err() {
