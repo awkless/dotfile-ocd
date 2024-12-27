@@ -50,6 +50,11 @@ impl Dependencies {
         self.adj_list.entry(edge).or_default();
     }
 
+    /// Determine list of dependencies to iterate through using DFS.
+    pub fn iter_dfs(&self, start: impl Into<String>) -> DependenciesDfsIterator<'_> {
+        DependenciesDfsIterator::new(&self.adj_list, start)
+    }
+
     /// Check that no dependencies are circular.
     pub fn acyclic_check(&self) -> Result<(), DependencyError> {
         let result = self.topological_sort();
@@ -97,6 +102,52 @@ impl Dependencies {
         }
 
         result
+    }
+}
+
+pub struct DependenciesDfsIterator<'deps> {
+    adj_list: &'deps HashMap<String, Vec<String>>,
+    visited: HashSet<String>,
+    stack: VecDeque<String>,
+}
+
+impl<'deps> DependenciesDfsIterator<'deps> {
+    fn new(adj_list: &'deps HashMap<String, Vec<String>>, start: impl Into<String>) -> Self {
+        let start = start.into();
+        let mut stack: VecDeque<String> = VecDeque::new();
+        stack.push_front(start.clone());
+        let mut visited: HashSet<String> = HashSet::new();
+        visited.insert(start);
+
+        Self { adj_list, visited, stack }
+    }
+}
+
+impl<'deps> Iterator for DependenciesDfsIterator<'deps> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<String> {
+        if self.stack.is_empty() {
+            for vertex in self.adj_list.keys() {
+                if !self.visited.contains(vertex) {
+                    self.stack.push_front(vertex.clone());
+                    self.visited.insert(vertex.clone());
+                    break;
+                }
+            }
+        }
+
+        if let Some(vertex) = self.stack.pop_front() {
+            for edge in &self.adj_list[&vertex] {
+                if !self.visited.contains(edge) {
+                    self.stack.push_front(edge.clone());
+                    self.visited.insert(edge.clone());
+                }
+            }
+            return Some(vertex);
+        }
+
+        None
     }
 }
 
