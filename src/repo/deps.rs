@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
-use crate::config::{ConfigFile, RepoConfig, Locator};
+use crate::config::{ConfigFile, Locator, RepoConfig};
 
-use std::collections::HashMap;
 use snafu::prelude::*;
+use std::collections::{HashMap, VecDeque};
 
 /// Handle repository dependencies.
 ///
@@ -50,14 +50,54 @@ impl Dependencies {
         self.adj_list.entry(edge).or_default();
     }
 
+    /// Check that no dependencies are circular.
     pub fn acyclic_check(&self) -> Result<(), DependencyError> {
-        todo!();
+        let result = self.topological_sort();
+        if result.len() != self.adj_list.len() {
+            return Err(DependencyError(InnerDependencyError::FoundCycle {
+                deps: result.join(" "),
+            }));
+        }
+
+        Ok(())
     }
 
+    /// Produce topological sort of dependencies.
     pub fn topological_sort(&self) -> Vec<String> {
-        todo!();
-    }
+        // Use Kahn's algorithm for topological sorting...
+        let mut in_degree: HashMap<String, usize> = HashMap::new();
+        let mut queue: VecDeque<String> = VecDeque::new();
+        let mut result: Vec<String> = Vec::new();
 
+        // Initialize in-degree for each node...
+        for edges in self.adj_list.values() {
+            for edge in edges {
+                *in_degree.entry(edge.clone()).or_insert(0) += 1;
+            }
+        }
+
+        // Add vertex with in-degree 0 to queue...
+        for vertex in self.adj_list.keys() {
+            if !in_degree.contains_key(vertex) {
+                queue.push_back(vertex.clone());
+            }
+        }
+
+        // Perform BFS...
+        while let Some(vertex) = queue.pop_front() {
+            result.push(vertex.clone());
+            if let Some(edges) = self.adj_list.get(&vertex) {
+                for edge in edges {
+                    *in_degree.get_mut(edge).unwrap() -= 1;
+                    if *in_degree.get(edge).unwrap() == 0 {
+                        queue.push_back(edge.clone());
+                    }
+                }
+            }
+        }
+
+        result
+    }
 }
 
 #[derive(Debug, Snafu)]
@@ -67,8 +107,8 @@ pub type Result<T, E = DependencyError> = std::result::Result<T, E>;
 
 #[derive(Debug, Snafu)]
 enum InnerDependencyError {
-    #[snafu(display("Following repositories have been defined as circular dependencies: '{deps}'"))]
-    FoundCycle  { deps: String },
+    #[snafu(display("Following repositories defined as circular dependencies: '{deps}'"))]
+    FoundCycle { deps: String },
 }
 
 #[cfg(test)]
