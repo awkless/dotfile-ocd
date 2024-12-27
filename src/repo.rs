@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
+mod deps;
 mod vcs;
 
 #[doc(inline)]
 pub use vcs::*;
+pub use deps::*;
 
 use crate::config::{Locator, ConfigFile, RepoConfig, ConfigError, RepoSettings};
 
@@ -20,6 +22,7 @@ where
     git: Git,
     config: ConfigFile<'repo, RepoConfig, L>,
     locator: &'repo L,
+    deps: Dependencies,
 }
 
 impl<'repo, L> RepoManager<'repo, L>
@@ -31,8 +34,12 @@ where
         config: ConfigFile<'repo, RepoConfig, L>,
         locator: &'repo L,
     ) -> Result<Self, RepoManagerError> {
-        let repo_mgr = Self { git: Git::new(), config, locator };
+        let mut deps = Dependencies::new();
+        deps.with_config_file(&config);
+
+        let repo_mgr = Self { git: Git::new(), config, locator, deps };
         repo_mgr.check_duplicate_setting_array_values()?;
+        repo_mgr.deps.acyclic_check().context(DependencySnafu)?;
 
         Ok(repo_mgr)
     }
@@ -107,6 +114,10 @@ pub type Result<T, E = RepoManagerError> = std::result::Result<T, E>;
 enum InnerRepoManagerError {
     ConfigFile {
         source: ConfigError,
+    },
+
+    Dependency {
+        source: DependencyError,
     },
 
     #[snafu(display("Repository setting '{setting}' contains duplicate entries: '{:}'"))]
