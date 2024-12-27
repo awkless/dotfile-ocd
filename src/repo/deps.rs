@@ -4,7 +4,7 @@
 use crate::config::{ConfigFile, Locator, RepoConfig};
 
 use snafu::prelude::*;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque, HashSet};
 
 /// Handle repository dependencies.
 ///
@@ -128,5 +128,17 @@ mod tests {
         deps.add_edge("foo", "vim");
         let result = deps.acyclic_check();
         assert!(matches!(result.unwrap_err().0, InnerDependencyError::FoundCycle { .. }));
+    }
+
+    #[rstest]
+    fn dependencies_acyclic_check_return_ok() {
+        let mut deps = Dependencies::new();
+        deps.add_vertex("vim");
+        deps.add_vertex("foo");
+        deps.add_vertex("bar");
+        deps.add_edge("vim", "bar");
+        deps.add_edge("bar", "foo");
+        let result = deps.acyclic_check();
+        assert!(result.is_ok());
     }
 }
