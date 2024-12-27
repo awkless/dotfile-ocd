@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
-use crate::config::{ConfigFile, RepoConfig, Locator, RepoSettings};
+use crate::config::{ConfigFile, RepoConfig, Locator};
 
 use std::collections::HashMap;
+use snafu::prelude::*;
 
 /// Handle repository dependencies.
 ///
@@ -38,22 +39,54 @@ impl Dependencies {
     }
 
     /// Add new vertex.
-    pub fn add_vertex(&mut self, vertex: String) {
-        self.adj_list.entry(vertex.clone()).or_default();
+    pub fn add_vertex(&mut self, vertex: impl Into<String>) {
+        self.adj_list.entry(vertex.into()).or_default();
     }
 
     /// Add new edge to given vertex.
-    pub fn add_edge(&mut self, vertex: String, edge: String) {
-        self.adj_list.entry(vertex.clone()).or_default().push(edge.clone());
-        self.adj_list.entry(edge.clone()).or_default();
+    pub fn add_edge(&mut self, vertex: impl Into<String>, edge: impl Into<String>) {
+        let edge = edge.into();
+        self.adj_list.entry(vertex.into()).or_default().push(edge.clone());
+        self.adj_list.entry(edge).or_default();
     }
 
-    pub fn topological_sort(&self) -> Option<Vec<String>> {
+    pub fn acyclic_check(&self) -> Result<(), DependencyError> {
         todo!();
     }
+
+    pub fn topological_sort(&self) -> Vec<String> {
+        todo!();
+    }
+
+}
+
+#[derive(Debug, Snafu)]
+pub struct DependencyError(InnerDependencyError);
+
+pub type Result<T, E = DependencyError> = std::result::Result<T, E>;
+
+#[derive(Debug, Snafu)]
+enum InnerDependencyError {
+    #[snafu(display("Following repositories have been defined as circular dependencies: '{deps}'"))]
+    FoundCycle  { deps: String },
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use rstest::rstest;
+
+    #[rstest]
+    fn dependencies_acyclic_check_return_err() {
+        let mut deps = Dependencies::new();
+        deps.add_vertex("vim");
+        deps.add_vertex("foo");
+        deps.add_vertex("bar");
+        deps.add_edge("vim", "bar");
+        deps.add_edge("bar", "foo");
+        deps.add_edge("foo", "vim");
+        let result = deps.acyclic_check();
+        assert!(matches!(result.unwrap_err().0, InnerDependencyError::FoundCycle { .. }));
+    }
 }
