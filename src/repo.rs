@@ -4,14 +4,14 @@
 mod deps;
 mod vcs;
 
-pub use deps::*;
 #[doc(inline)]
+pub use deps::*;
 pub use vcs::*;
 
 use crate::config::{ConfigError, ConfigFile, Locator, RepoConfig, RepoSettings};
 
 use snafu::prelude::*;
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Manage repository collection.
 #[derive(Debug)]
@@ -34,75 +34,55 @@ where
         config: ConfigFile<'repo, RepoConfig, L>,
         locator: &'repo L,
     ) -> Result<Self, RepoManagerError> {
+        duplicate_settings_check(&config)?;
+
         let mut deps = Dependencies::new();
         deps.with_config_file(&config);
+        deps.acyclic_check().context(DependencySnafu)?;
 
-        let repo_mgr = Self { git: Git::new(), config, locator, deps };
-        repo_mgr.check_duplicate_setting_array_values()?;
-        repo_mgr.deps.acyclic_check().context(DependencySnafu)?;
-
-        Ok(repo_mgr)
-    }
-
-    fn check_duplicate_setting_array_values(&self) -> Result<(), InnerRepoManagerError> {
-        let repos: Vec<RepoSettings> = self.config.iter().collect();
-        for repo in repos {
-            if let Some(bootstrap) = repo.bootstrap {
-                let result = find_duplicates(&bootstrap.depends.unwrap_or_default());
-                if !result.is_empty() {
-                    return Err(InnerRepoManagerError::DuplicateSettingValues {
-                        setting: format!("{}.bootstrap.depends", repo.name),
-                        duplicates: result,
-                    });
-                }
-
-                let result = find_duplicates(&bootstrap.ignores.unwrap_or_default());
-                if !result.is_empty() {
-                    return Err(InnerRepoManagerError::DuplicateSettingValues {
-                        setting: format!("{}.bootstrap.ignores", repo.name),
-                        duplicates: result,
-                    });
-                }
-
-                let result = find_duplicates(&bootstrap.users.unwrap_or_default());
-                if !result.is_empty() {
-                    return Err(InnerRepoManagerError::DuplicateSettingValues {
-                        setting: format!("{}.bootstrap.users", repo.name),
-                        duplicates: result,
-                    });
-                }
-
-                let result = find_duplicates(&bootstrap.hosts.unwrap_or_default());
-                if !result.is_empty() {
-                    return Err(InnerRepoManagerError::DuplicateSettingValues {
-                        setting: format!("{}.bootstrap.hosts", repo.name),
-                        duplicates: result,
-                    });
-                }
-            }
-        }
-
-        Ok(())
+        Ok(Self { git: Git::new(), config, locator, deps })
     }
 }
 
-fn find_duplicates(entries: &Vec<String>) -> Vec<String> {
-    let mut values: HashMap<String, usize> = HashMap::new();
-    let mut duplicates = Vec::new();
-    for entry in entries {
-        match values.get_key_value(entry) {
-            Some((key, value)) => {
-                if *value >= 1 {
-                    duplicates.push(entry.clone());
-                } else {
-                    values.insert(key.clone(), value + 1);
-                }
-            }
-            None => _ = values.insert(entry.clone(), 1),
-        };
+fn duplicate_settings_check(
+    config: &ConfigFile<'_, RepoConfig, impl Locator>,
+) -> Result<(), InnerRepoManagerError> {
+    let repos: Vec<RepoSettings> = config.iter().collect();
+    for repo in repos {
+        if let Some(bootstrap) = repo.bootstrap {
+            find_duplicates(&bootstrap.depends, &format!("{}.bootstrap.depends", repo.name))?;
+            find_duplicates(&bootstrap.ignores, &format!("{}.bootstrap.ignores", repo.name))?;
+            find_duplicates(&bootstrap.users, &format!("{}.bootstrap.users", repo.name))?;
+            find_duplicates(&bootstrap.hosts, &format!("{}.bootstrap.hosts", repo.name))?;
+        }
     }
 
-    duplicates
+    Ok(())
+}
+
+fn find_duplicates(
+    entries: &Option<Vec<String>>,
+    setting_name: &str,
+) -> Result<(), InnerRepoManagerError> {
+    if let Some(entries) = entries {
+        let mut seen = HashSet::new();
+        let mut duplicates = Vec::new();
+
+        for entry in entries {
+            if !seen.insert(entry) {
+                duplicates.push(entry.clone());
+            }
+        }
+
+        if !duplicates.is_empty() {
+            return Err(InnerRepoManagerError::DuplicateSettingValues {
+                setting: setting_name.to_string(),
+                duplicates,
+            });
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Snafu)]
@@ -120,7 +100,7 @@ enum InnerRepoManagerError {
         source: DependencyError,
     },
 
-    #[snafu(display("Repository setting '{setting}' contains duplicate entries: '{:}'"))]
+    #[snafu(display("Repository setting '{setting}' contains duplicate entries: '{:?}'"))]
     DuplicateSettingValues {
         setting: String,
         duplicates: Vec<String>,
@@ -187,7 +167,7 @@ mod tests {
 
     #[report]
     #[rstest]
-    fn repo_manager_manage_check_duplicate_settings_return_self(
+    fn repo_manager_manage_duplicate_settings_check_return_ok(
         config_dir: Result<FixtureHarness, Whatever>,
     ) -> Result<(), Whatever> {
         let config_dir = config_dir?;
@@ -205,7 +185,7 @@ mod tests {
 
     #[report]
     #[rstest]
-    fn repo_manager_manage_check_duplicate_settings_return_err(
+    fn repo_manager_manage_duplicate_settings_check_return_err(
         config_dir: Result<FixtureHarness, Whatever>,
     ) -> Result<(), Whatever> {
         let config_dir = config_dir?;
