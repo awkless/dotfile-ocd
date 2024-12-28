@@ -56,6 +56,10 @@ impl Dependencies {
     }
 
     /// Check that no dependencies are circular.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if cycle is found.
     pub fn acyclic_check(&self) -> Result<(), DependencyError> {
         let result = self.topological_sort();
         if result.len() != self.adj_list.len() {
