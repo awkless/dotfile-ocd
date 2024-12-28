@@ -30,6 +30,11 @@ where
     L: Locator,
 {
     /// Construct new repository manager.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if duplicate entries are found in array values of bootstrap
+    /// configuration field, or a circular dependency is found.
     pub fn manage(
         config: ConfigFile<'repo, RepoConfig, L>,
         locator: &'repo L,
