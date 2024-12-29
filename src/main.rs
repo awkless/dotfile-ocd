@@ -5,15 +5,20 @@
 
 mod cli;
 mod config;
-mod context;
 mod repo;
 
 #[cfg(test)]
 mod testenv;
 
+use crate::{
+    cli::{Cli, CliError},
+    config::ConfigError,
+    repo::RepoManagerError,
+};
+
 use env_logger::Builder as EnvLogBuilder;
 use log::{error, LevelFilter};
-use snafu::{Report, Whatever};
+use snafu::{prelude::*, Report};
 use std::{env::args_os, ffi::OsString, process::exit};
 
 fn main() {
@@ -37,12 +42,15 @@ fn main() {
     exit(code);
 }
 
-fn run<I, F>(_args: F) -> Result<ExitCode, Whatever>
+fn run<I, F>(args: F) -> Result<ExitCode, BinError>
 where
     I: IntoIterator<Item = OsString>,
     F: FnOnce() -> I + Clone,
 {
-    todo!();
+    let opts = Cli::parse_args(args()).context(CliSnafu)?;
+    log::set_max_level(opts.log_opts.log_level_filter());
+
+    Ok(ExitCode::Success)
 }
 
 #[derive(Debug)]
@@ -58,4 +66,16 @@ impl From<ExitCode> for i32 {
             ExitCode::Failure => 1,
         }
     }
+}
+
+#[derive(Debug, Snafu)]
+pub enum BinError {
+    #[snafu(display("dotfile-ocd cli failure"))]
+    Cli { source: CliError },
+
+    #[snafu(display("dotfile-ocd configuration file failure"))]
+    ConfigFile { source: ConfigError },
+
+    #[snafu(display("dotfile-ocd repository manager failure"))]
+    RepoManager { source: RepoManagerError },
 }
