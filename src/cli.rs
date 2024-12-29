@@ -1,9 +1,15 @@
 // SPDX-FileCopyrightText: 2024 Jason Pena <jasonpena@awkless.com>
 // SPDX-License-Identifier: MIT
 
+mod ctx;
+
+#[doc(inline)]
+pub use ctx::*;
+
 use clap::{Args, Parser, Subcommand, Error as ClapError};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use snafu::prelude::*;
+use std::ffi::OsString;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -22,6 +28,20 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub cmd_set: CommandSet,
+}
+
+impl Cli {
+    /// Parse a set of command-line arguments.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if given invalid arguments to parse.
+    pub fn parse_args(
+        args: impl IntoIterator<Item = impl Into<OsString> + Clone>,
+    ) -> Result<Self, CliError> {
+        let cli = Self::try_parse_from(args).context(BadParseSnafu)?;
+        Ok(cli)
+    }
 }
 
 #[derive(Debug, Subcommand)]
