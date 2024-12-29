@@ -49,7 +49,10 @@ pub enum CommandSet { }
 
 #[derive(Debug, Args)]
 #[command(next_help_heading = "Command Options")]
-pub struct SharedOptions { }
+pub struct SharedOptions {
+    #[arg(default_value_t = HookAction::default(), long, short, value_enum, value_name = "ACTION")]
+    pub run_hook: HookAction,
+}
 
 #[derive(Debug, Snafu)]
 pub struct CliError(InnerCliError);
