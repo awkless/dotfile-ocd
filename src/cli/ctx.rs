@@ -6,7 +6,6 @@ use crate::cli::*;
 use clap::ValueEnum;
 use std::path::PathBuf;
 
-
 #[derive(Debug, Eq, PartialEq)]
 pub enum Ctx {
     Init(InitCtx),
@@ -244,7 +243,7 @@ impl From<Cli> for GitCtx {
             CommandSet::Git(opts) => opts,
             _ => unreachable!("This should not happen. The command is not a git shortcut"),
         };
-        
+
         Self { repo: cmd_set[0].clone(), git_args: cmd_set[1..].to_vec() }
     }
 }
