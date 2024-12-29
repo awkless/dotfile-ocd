@@ -8,9 +8,9 @@ pub use ctx::*;
 
 use clap::{Args, Error as ClapError, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
+use indoc::indoc;
 use snafu::prelude::*;
 use std::{ffi::OsString, path::PathBuf};
-use indoc::indoc;
 
 macro_rules! explain_cmd_shortcuts {
     () => {
@@ -97,7 +97,7 @@ pub enum CommandSet {
 pub struct InitOptions {
     pub name: String,
 
-    #[arg(short, long, value_name = "DIR")]
+    #[arg(short = 'a', long, value_name = "DIR")]
     pub bare_alias: Option<PathBuf>,
 
     #[arg(short, long, value_name = "BRANCH")]
