@@ -3,7 +3,9 @@
 
 #![allow(dead_code)]
 
+mod cli;
 mod config;
+mod context;
 mod repo;
 
 #[cfg(test)]
