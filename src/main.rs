@@ -11,7 +11,7 @@ mod repo;
 mod testenv;
 
 use crate::{
-    cli::{Cli, CliError},
+    cli::{Cli, CliError, Ctx},
     config::ConfigError,
     repo::RepoManagerError,
 };
@@ -49,6 +49,8 @@ where
 {
     let opts = Cli::parse_args(args()).context(CliSnafu)?;
     log::set_max_level(opts.log_opts.log_level_filter());
+
+    let _ctx = Ctx::from(opts);
 
     Ok(ExitCode::Success)
 }
