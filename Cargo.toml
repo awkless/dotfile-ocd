@@ -19,6 +19,8 @@ name = "ocd"
 path = "src/main.rs"
 
 [dependencies]
+clap = { version = "~4.5.20", features = ["derive"] }
+clap-verbosity-flag = "~2.2.2"
 directories = "~5.0.1"
 env_logger = "~0.11.5"
 indoc = "~2.0.5"
