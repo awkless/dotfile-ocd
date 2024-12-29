@@ -6,17 +6,26 @@ mod ctx;
 #[doc(inline)]
 pub use ctx::*;
 
-use clap::{Args, Parser, Subcommand, Error as ClapError};
+use clap::{Args, Error as ClapError, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use snafu::prelude::*;
-use std::{
-    path::PathBuf,
-    ffi::OsString,
-};
+use std::{ffi::OsString, path::PathBuf};
+use indoc::indoc;
+
+macro_rules! explain_cmd_shortcuts {
+    () => {
+        indoc! {r#"
+        Command Shortcuts:
+          <REPO> <GIT_CMD>  Shortcut to run user's Git binary on a target repository
+        "#}
+    };
+}
 
 #[derive(Debug, Parser)]
 #[command(
     about,
+    after_help = explain_cmd_shortcuts!(),
+    after_long_help = explain_cmd_shortcuts!(),
     long_about = None,
     subcommand_help_heading = "Command Set",
     version,
