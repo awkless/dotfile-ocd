@@ -12,8 +12,8 @@ mod testenv;
 
 use crate::{
     cli::{Cli, CliError, Ctx},
-    config::ConfigError,
-    repo::RepoManagerError,
+    config::{ConfigError, ConfigFile, LocateError, RepoConfig, XdgLocator},
+    repo::{RepoManager, RepoManagerError},
 };
 
 use env_logger::Builder as EnvLogBuilder;
@@ -50,7 +50,17 @@ where
     let opts = Cli::parse_args(args()).context(CliSnafu)?;
     log::set_max_level(opts.log_opts.log_level_filter());
 
-    let _ctx = Ctx::from(opts);
+    let ctx = Ctx::from(opts);
+    let locator = XdgLocator::locate().context(LocatorSnafu)?;
+    let config = ConfigFile::load(RepoConfig, &locator).context(ConfigFileSnafu)?;
+    let mut repo_mgr = RepoManager::manage(config, &locator).context(RepoManagerSnafu)?;
+
+    match ctx {
+        Ctx::Init(ctx) => {
+            repo_mgr.init(ctx.name, ctx.branch, ctx.bare_alias).context(RepoManagerSnafu)?
+        }
+        _ => todo!(),
+    };
 
     Ok(ExitCode::Success)
 }
@@ -74,6 +84,9 @@ impl From<ExitCode> for i32 {
 pub enum BinError {
     #[snafu(display("dotfile-ocd cli failure"))]
     Cli { source: CliError },
+
+    #[snafu(display("dotfile-ocd locator failure"))]
+    Locator { source: LocateError },
 
     #[snafu(display("dotfile-ocd configuration file failure"))]
     ConfigFile { source: ConfigError },
